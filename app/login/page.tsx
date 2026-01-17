@@ -32,7 +32,7 @@ export default function LoginPage() {
 
       router.push('/');
       router.refresh();
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -40,69 +40,176 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-valuenova-bg flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 mx-auto mb-6">
-            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#0B0E14',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px'
+    }}>
+      <div style={{ width: '100%', maxWidth: '400px' }}>
+        {/* Logo and Title */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            backgroundColor: '#4F46E5',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 24px auto',
+            boxShadow: '0 25px 50px -12px rgba(79, 70, 229, 0.25)'
+          }}>
+            <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-2">CampaignOS</h1>
-          <p className="text-gray-500 font-bold uppercase tracking-[0.2em] text-xs">Sign in to continue</p>
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: 900,
+            color: 'white',
+            textTransform: 'uppercase',
+            letterSpacing: '-0.05em',
+            margin: '0 0 8px 0'
+          }}>
+            CampaignOS
+          </h1>
+          <p style={{
+            color: '#6B7280',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.2em',
+            fontSize: '11px',
+            margin: 0
+          }}>
+            Sign in to continue
+          </p>
         </div>
 
-        <div className="bg-valuenova-surface p-8 rounded-3xl border border-valuenova-border shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Login Form Card */}
+        <div style={{
+          backgroundColor: '#161B22',
+          padding: '32px',
+          borderRadius: '24px',
+          border: '1px solid #30363D'
+        }}>
+          <form onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm font-bold">
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                color: '#F87171',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                fontSize: '14px',
+                fontWeight: 700,
+                marginBottom: '24px'
+              }}>
                 {error}
               </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '10px',
+                fontWeight: 900,
+                color: '#9CA3AF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                marginBottom: '8px'
+              }}>
                 Email Address
               </label>
               <input
-                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl bg-valuenova-bg border border-valuenova-border text-white font-bold focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 placeholder="you@company.com"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  backgroundColor: '#0B0E14',
+                  border: '1px solid #30363D',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '10px',
+                fontWeight: 900,
+                color: '#9CA3AF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                marginBottom: '8px'
+              }}>
                 Password
               </label>
               <input
-                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl bg-valuenova-bg border border-valuenova-border text-white font-bold focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  backgroundColor: '#0B0E14',
+                  border: '1px solid #30363D',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20"
+              style={{
+                width: '100%',
+                padding: '16px',
+                backgroundColor: loading ? '#6366F1' : '#4F46E5',
+                color: 'white',
+                borderRadius: '12px',
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                fontSize: '13px',
+                border: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+                boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.25)'
+              }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-valuenova-border text-center">
-            <p className="text-gray-500 text-sm">
+          <div style={{
+            marginTop: '24px',
+            paddingTop: '24px',
+            borderTop: '1px solid #30363D',
+            textAlign: 'center'
+          }}>
+            <p style={{ color: '#6B7280', fontSize: '14px', margin: 0 }}>
               Don&apos;t have an account?{' '}
-              <Link href="/register" className="text-indigo-400 font-bold hover:text-indigo-300 transition-colors">
+              <Link href="/register" style={{ color: '#818CF8', fontWeight: 700, textDecoration: 'none' }}>
                 Create one
               </Link>
             </p>
