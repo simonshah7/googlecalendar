@@ -67,7 +67,7 @@ const ActivityBar: React.FC<{
   cardProfile: CardDisplayProfile;
   onMouseDown: (e: React.MouseEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
   onTouchStart: (e: React.TouchEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
-  onDoubleClick: (activity: Activity) => void;
+  onEdit: (activity: Activity) => void;
   onDuplicate: (activityId: string) => void;
   onDelete: (id: string) => void;
   isDragging: boolean;
@@ -79,7 +79,7 @@ const ActivityBar: React.FC<{
   isSelected?: boolean;
   onSelect?: (id: string, isShiftClick: boolean) => void;
   lastDragEndTimeRef?: React.MutableRefObject<number>;
-}> = ({ activity, timelineStartDate, top, cardProfile, onMouseDown, onTouchStart, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect, lastDragEndTimeRef }) => {
+}> = ({ activity, timelineStartDate, top, density, onMouseDown, onTouchStart, onEdit, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect, lastDragEndTimeRef }) => {
   const startOffsetDays = diffDaysUTC(formatDate(timelineStartDate), activity.startDate);
   const durationDays = diffDaysUTC(activity.startDate, activity.endDate) + 1;
 
@@ -145,13 +145,14 @@ const ActivityBar: React.FC<{
         onTouchStart(e, activity, 'drag');
       }}
       onDoubleClick={(e) => {
-        if (isGhost) return;
+        if (isGhost || readOnly) return;
         e.stopPropagation();
         // Prevent double-click if a drag just ended (within 300ms)
         if (lastDragEndTimeRef && Date.now() - lastDragEndTimeRef.current < 300) {
           return;
         }
-        onDoubleClick(activity);
+        // Double-click duplicates the activity
+        onDuplicate(activity.id);
       }}
       onClick={(e) => {
         e.stopPropagation();
@@ -229,7 +230,19 @@ const ActivityBar: React.FC<{
       </div>
 
        {!isGhost && !readOnly && (
-         <div className="absolute right-1 top-0 h-full flex items-center gap-0.5 z-40 opacity-0 group-hover:opacity-100 transition-opacity">
+         <div className={`absolute right-1 top-0 h-full flex items-center gap-0.5 z-40 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <button
+            onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit(activity);
+            }}
+            className="p-1 rounded-full text-gray-800 hover:bg-white/40 focus:outline-none transition-colors"
+            title="Edit"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+          </button>
           <button
             onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
             onClick={e => {
@@ -1019,7 +1032,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                       cardProfile={activeProfile}
                       onMouseDown={() => {}}
                       onTouchStart={() => {}}
-                      onDoubleClick={() => {}}
+                      onEdit={() => {}}
                       onDuplicate={() => {}}
                       onDelete={() => {}}
                       isDragging={false}
@@ -1041,7 +1054,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                           cardProfile={activeProfile}
                           onMouseDown={handleMouseDown}
                           onTouchStart={handleTouchStart}
-                          onDoubleClick={onEdit}
+                          onEdit={onEdit}
                           onDuplicate={onDuplicate}
                           onDelete={onDeleteActivity}
                           isDragging={isDragging}
