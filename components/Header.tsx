@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { ViewType } from '../App';
-import { User, UserRole } from '../types';
+import { User, UserRole, NotificationRelatedType } from '../types';
 import Tooltip from './Tooltip';
+import NotificationBell from './NotificationBell';
 
 interface HeaderProps {
   onAddActivityClick: () => void;
@@ -19,6 +20,7 @@ interface HeaderProps {
   onLogout: () => void;
   isSyncing?: boolean;
   lastSync?: Date | null;
+  onNotificationNavigate?: (type: NotificationRelatedType, id: string) => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -35,7 +37,8 @@ const Header: React.FC<HeaderProps> = ({
   user,
   onLogout,
   isSyncing,
-  lastSync
+  lastSync,
+  onNotificationNavigate
 }) => {
   const isManager = user?.role === UserRole.MANAGER || user?.role === UserRole.ADMIN;
 
@@ -112,6 +115,9 @@ const Header: React.FC<HeaderProps> = ({
         </nav>
 
         <div className="flex items-center gap-1 sm:gap-3">
+          {/* Notification Bell */}
+          <NotificationBell onNavigate={onNotificationNavigate} />
+
           <Tooltip content={isDarkMode ? "Light mode" : "Dark mode"} shortcut="D" position="bottom">
             <button
               onClick={toggleDarkMode}

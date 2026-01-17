@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, calendars, swimlanes, calendarPermissions } from '@/db';
+import { db, calendars, swimlanes, calendarPermissions, campaignPermissions, campaigns } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
 import { eq, inArray } from 'drizzle-orm';
 
@@ -8,7 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
  *
  * Returns:
  * - For Manager/Admin: All calendars in the system
- * - For regular users: Calendars they own + calendars shared with them
+ * - For regular users: Calendars they own + calendars shared with them + calendars with campaign access
  */
 export async function GET() {
   try {
@@ -29,7 +29,7 @@ export async function GET() {
       .from(calendars)
       .where(eq(calendars.ownerId, user.id));
 
-    // Also get calendars shared with them
+    // Get calendars shared with them via calendar permissions
     const sharedPermissions = await db
       .select({ calendarId: calendarPermissions.calendarId })
       .from(calendarPermissions)
@@ -37,13 +37,37 @@ export async function GET() {
 
     const sharedCalendarIds = sharedPermissions.map(p => p.calendarId);
 
+    // Get calendars they have access to via campaign permissions
+    const userCampaignPerms = await db
+      .select({ campaignId: campaignPermissions.campaignId })
+      .from(campaignPermissions)
+      .where(eq(campaignPermissions.userId, user.id));
+
+    const campaignIds = userCampaignPerms.map(p => p.campaignId);
+
+    // Get the calendar IDs from those campaigns
+    let campaignCalendarIds: string[] = [];
+    if (campaignIds.length > 0) {
+      const campaignsWithCalendars = await db
+        .select({ calendarId: campaigns.calendarId })
+        .from(campaigns)
+        .where(inArray(campaigns.id, campaignIds));
+      campaignCalendarIds = campaignsWithCalendars.map(c => c.calendarId);
+    }
+
+    // Combine all calendar IDs the user has access to
+    const accessibleCalendarIds = new Set([
+      ...sharedCalendarIds,
+      ...campaignCalendarIds
+    ]);
+
     // Fetch shared calendars if any exist
     let sharedCalendars: typeof ownedCalendars = [];
-    if (sharedCalendarIds.length > 0) {
+    if (accessibleCalendarIds.size > 0) {
       sharedCalendars = await db
         .select()
         .from(calendars)
-        .where(inArray(calendars.id, sharedCalendarIds));
+        .where(inArray(calendars.id, Array.from(accessibleCalendarIds)));
     }
 
     // Combine and deduplicate (in case of any overlap)

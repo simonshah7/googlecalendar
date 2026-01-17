@@ -1,13 +1,27 @@
 
 import React, { useState, useEffect, useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Activity, Swimlane, CampaignStatus } from '../types';
+import { Activity, Swimlane, CampaignStatus, CardDisplayProfile, FieldStyle, DEFAULT_CARD_PROFILES } from '../types';
 import { SWIMLANE_COLORS } from '../constants';
 import EmptyState from './EmptyState';
+import CardStylePanel from './CardStylePanel';
 
 const ZOOM_LEVELS = [4, 8, 12, 20, 30]; // pixels per day
 const DEFAULT_ZOOM_INDEX = 2; // Corresponds to 12px
 
-type Density = 'compact' | 'detailed';
+// Font size mapping for card display
+const FONT_SIZE_MAP: Record<string, string> = {
+  'xs': '9px',
+  'sm': '11px',
+  'base': '13px',
+  'lg': '15px',
+};
+
+// Font weight mapping for card display
+const FONT_WEIGHT_MAP: Record<string, string> = {
+  'normal': '400',
+  'bold': '700',
+  'black': '900',
+};
 
 // Helper functions
 const addDays = (date: Date, days: number): Date => {
@@ -50,7 +64,7 @@ const ActivityBar: React.FC<{
   activity: Activity;
   timelineStartDate: Date;
   top: number;
-  density: Density;
+  cardProfile: CardDisplayProfile;
   onMouseDown: (e: React.MouseEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
   onTouchStart: (e: React.TouchEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
   onEdit: (activity: Activity) => void;
@@ -72,7 +86,24 @@ const ActivityBar: React.FC<{
   const left = startOffsetDays * dayWidth;
   const width = Math.max(durationDays * dayWidth, 2);
 
-  const barHeight = density === 'compact' ? 32 : 68;
+  const barHeight = cardProfile.cardHeight;
+  const fields = cardProfile.fields;
+
+  // Helper to get field style
+  const getFieldStyle = (fieldConfig: FieldStyle): React.CSSProperties => ({
+    fontSize: FONT_SIZE_MAP[fieldConfig.fontSize],
+    fontWeight: FONT_WEIGHT_MAP[fieldConfig.fontWeight],
+    textTransform: fieldConfig.uppercase ? 'uppercase' : 'none',
+  });
+
+  // Format date range for display
+  const formatDateRange = (start: string, end: string): string => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const startStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return startStr === endStr ? startStr : `${startStr} - ${endStr}`;
+  };
 
   const barStyle: React.CSSProperties = {
     left: `${left + (isDragging ? (draggingOffset?.x || 0) : 0)}px`,
@@ -88,11 +119,14 @@ const ActivityBar: React.FC<{
 
   const getStatusDot = (status: string) => {
     switch (status) {
-      case 'Committed': return <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />;
-      case 'Negotiating': return <div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm" />;
-      default: return <div className="w-2 h-2 rounded-full bg-sky-500 shadow-sm" />;
+      case 'Committed': return <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shrink-0" />;
+      case 'Negotiating': return <div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shrink-0" />;
+      default: return <div className="w-2 h-2 rounded-full bg-sky-500 shadow-sm shrink-0" />;
     }
   };
+
+  // Check if we have any secondary fields visible
+  const hasSecondaryFields = fields.region.visible || fields.status.visible || fields.cost.visible || fields.dates.visible;
 
   return (
     <div
@@ -143,24 +177,54 @@ const ActivityBar: React.FC<{
       )}
 
       <div className="px-3 py-2 h-full flex flex-col justify-center overflow-hidden pointer-events-none">
-        <div className="flex items-center gap-2 mb-1">
-          {density === 'detailed' && getStatusDot(activity.status)}
-          <p className="font-black text-[11px] truncate text-gray-900 dark:text-gray-900 leading-tight uppercase tracking-tight">
-            {activity.title}
-          </p>
-        </div>
+        {/* Title row with optional status dot */}
+        {fields.title.visible && (
+          <div className={`flex items-center gap-2 ${hasSecondaryFields ? 'mb-1' : ''}`}>
+            {fields.statusDot.visible && getStatusDot(activity.status)}
+            <p
+              className="truncate text-gray-900 dark:text-gray-900 leading-tight tracking-tight"
+              style={getFieldStyle(fields.title)}
+            >
+              {activity.title}
+            </p>
+          </div>
+        )}
 
-        {density === 'detailed' && (
+        {/* Secondary fields row */}
+        {hasSecondaryFields && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[8px] font-black uppercase tracking-tighter bg-black/10 px-1.5 py-0.5 rounded text-gray-800">
-              {activity.region}
-            </span>
-            <span className="text-[9px] font-bold text-gray-700/80">
-              {activity.status}
-            </span>
-            <span className="text-[9px] font-black text-gray-800/90 ml-auto">
-              {activity.cost > 0 ? `${activity.currency}${activity.cost.toLocaleString()}` : 'No Cost'}
-            </span>
+            {fields.region.visible && (
+              <span
+                className="tracking-tighter bg-black/10 px-1.5 py-0.5 rounded text-gray-800"
+                style={getFieldStyle(fields.region)}
+              >
+                {activity.region}
+              </span>
+            )}
+            {fields.status.visible && (
+              <span
+                className="text-gray-700/80"
+                style={getFieldStyle(fields.status)}
+              >
+                {activity.status}
+              </span>
+            )}
+            {fields.dates.visible && (
+              <span
+                className="text-gray-700/80"
+                style={getFieldStyle(fields.dates)}
+              >
+                {formatDateRange(activity.startDate, activity.endDate)}
+              </span>
+            )}
+            {fields.cost.visible && (
+              <span
+                className="text-gray-800/90 ml-auto"
+                style={getFieldStyle(fields.cost)}
+              >
+                {activity.cost > 0 ? `${activity.currency}${activity.cost.toLocaleString()}` : 'No Cost'}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -268,9 +332,66 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   selectedActivities, onSelectActivity
 }, ref) => {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
-  const [density, setDensity] = useState<Density>('detailed');
   const [swimlaneHeights, setSwimlaneHeights] = useState<Record<string, number>>({});
   const dayWidth = ZOOM_LEVELS[zoomIndex];
+
+  // Card display profile state
+  const [cardProfiles, setCardProfiles] = useState<CardDisplayProfile[]>(() => {
+    // Try to load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('cardDisplayProfiles');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Merge with default profiles (in case new built-ins were added)
+          const customProfiles = parsed.filter((p: CardDisplayProfile) => !p.isBuiltIn);
+          return [...DEFAULT_CARD_PROFILES, ...customProfiles];
+        } catch {
+          return [...DEFAULT_CARD_PROFILES];
+        }
+      }
+    }
+    return [...DEFAULT_CARD_PROFILES];
+  });
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('activeCardProfileId') || 'detailed';
+    }
+    return 'detailed';
+  });
+  const [isCardStylePanelOpen, setIsCardStylePanelOpen] = useState(false);
+
+  // Get active profile
+  const activeProfile = cardProfiles.find(p => p.id === activeProfileId) || DEFAULT_CARD_PROFILES[1];
+
+  // Persist profile changes to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('cardDisplayProfiles', JSON.stringify(cardProfiles));
+      localStorage.setItem('activeCardProfileId', activeProfileId);
+    }
+  }, [cardProfiles, activeProfileId]);
+
+  // Profile handlers
+  const handleProfileChange = (profileId: string) => {
+    setActiveProfileId(profileId);
+  };
+
+  const handleProfileUpdate = (updatedProfile: CardDisplayProfile) => {
+    setCardProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+  };
+
+  const handleProfileCreate = (newProfile: CardDisplayProfile) => {
+    setCardProfiles(prev => [...prev, newProfile]);
+    setActiveProfileId(newProfile.id);
+  };
+
+  const handleProfileDelete = (profileId: string) => {
+    setCardProfiles(prev => prev.filter(p => p.id !== profileId));
+    if (activeProfileId === profileId) {
+      setActiveProfileId('detailed');
+    }
+  };
 
   // Dynamic timeline based on current year
   const currentYear = new Date().getFullYear();
@@ -370,7 +491,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
 
     swimlanes.forEach(swimlane => {
       const rows = swimlaneLayouts[swimlane.id] || [];
-      const barHeight = density === 'compact' ? 32 : 68;
+      const barHeight = activeProfile.cardHeight;
       const rowHeight = barHeight + 12;
       const minHeight = Math.max(1, rows.length) * rowHeight + 48;
       const height = swimlaneHeights[swimlane.id] || minHeight;
@@ -379,7 +500,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
       currentOffset += height;
     });
     return offsets;
-  }, [swimlanes, swimlaneLayouts, density, swimlaneHeights]);
+  }, [swimlanes, swimlaneLayouts, activeProfile.cardHeight, swimlaneHeights]);
 
   const swimlaneColorMap = useMemo(() => {
     return swimlanes.reduce((acc, swimlane, index) => {
@@ -662,7 +783,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   const todayOffset = diffDaysUTC(formatDate(timelineStartDate), formatDate(today)) * dayWidth;
   const showTodayLine = today >= timelineStartDate && today <= timelineEndDate;
 
-  const barHeight = density === 'compact' ? 32 : 68;
+  const barHeight = activeProfile.cardHeight;
 
   if (swimlanes.length === 0) {
     return (
@@ -687,18 +808,43 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                 <button onClick={() => setZoomIndex(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))} className="p-1.5 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-md text-gray-500 dark:text-valuenova-muted transition-colors" title="Zoom in (+)"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg></button>
             </div>
 
+            {/* Profile selector */}
             <div className="flex items-center bg-white dark:bg-valuenova-surface p-1 rounded-lg border border-gray-200 dark:border-valuenova-border shadow-sm">
-                {(['compact', 'detailed'] as Density[]).map(d => (
+                {cardProfiles.slice(0, 3).map(p => (
                     <button
-                        key={d}
-                        onClick={() => setDensity(d)}
-                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${density === d ? 'bg-indigo-600 dark:bg-valuenova-accent text-white shadow-md' : 'text-gray-400 dark:text-valuenova-muted hover:text-gray-600 dark:hover:text-white'}`}
-                        title={d === 'compact' ? 'Compact view' : 'Detailed view'}
+                        key={p.id}
+                        onClick={() => handleProfileChange(p.id)}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${activeProfileId === p.id ? 'bg-indigo-600 dark:bg-valuenova-accent text-white shadow-md' : 'text-gray-400 dark:text-valuenova-muted hover:text-gray-600 dark:hover:text-white'}`}
+                        title={`${p.name} view`}
                     >
-                        {d}
+                        {p.name}
                     </button>
                 ))}
+                {cardProfiles.length > 3 && (
+                  <select
+                    value={cardProfiles.slice(0, 3).some(p => p.id === activeProfileId) ? '' : activeProfileId}
+                    onChange={(e) => e.target.value && handleProfileChange(e.target.value)}
+                    className="px-2 py-1.5 text-[10px] font-black uppercase bg-transparent border-none text-gray-400 dark:text-valuenova-muted cursor-pointer focus:ring-0"
+                  >
+                    <option value="">More</option>
+                    {cardProfiles.slice(3).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
             </div>
+
+            {/* Card Style button */}
+            <button
+              onClick={() => setIsCardStylePanelOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-black uppercase bg-white dark:bg-valuenova-surface border border-gray-200 dark:border-valuenova-border rounded-lg text-gray-600 dark:text-valuenova-muted hover:text-indigo-600 dark:hover:text-valuenova-accent hover:border-indigo-300 dark:hover:border-valuenova-accent transition-colors shadow-sm"
+              title="Customize card display"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Card Style
+            </button>
 
             {/* Go to Today button */}
             <button
@@ -883,7 +1029,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                       activity={dragState.ghostActivity}
                       timelineStartDate={timelineStartDate}
                       top={(swimlaneLayouts[swimlane.id]?.findIndex(row => row.some(a => a.id === dragState.activity.id)) ?? 0) * rowHeight + 24}
-                      density={density}
+                      cardProfile={activeProfile}
                       onMouseDown={() => {}}
                       onTouchStart={() => {}}
                       onEdit={() => {}}
@@ -905,7 +1051,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                           activity={activity}
                           timelineStartDate={timelineStartDate}
                           top={rowIndex * rowHeight + 24}
-                          density={density}
+                          cardProfile={activeProfile}
                           onMouseDown={handleMouseDown}
                           onTouchStart={handleTouchStart}
                           onEdit={onEdit}
@@ -929,6 +1075,18 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
           </div>
         </div>
       </div>
+
+      {/* Card Style Panel */}
+      <CardStylePanel
+        isOpen={isCardStylePanelOpen}
+        onClose={() => setIsCardStylePanelOpen(false)}
+        profiles={cardProfiles}
+        activeProfileId={activeProfileId}
+        onProfileChange={handleProfileChange}
+        onProfileUpdate={handleProfileUpdate}
+        onProfileCreate={handleProfileCreate}
+        onProfileDelete={handleProfileDelete}
+      />
     </div>
   );
 });

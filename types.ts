@@ -286,6 +286,69 @@ export interface ActivityHistoryEntry {
   createdAt: string;
 }
 
+/**
+ * Campaign permission for sharing access to specific campaigns.
+ *
+ * Defines what level of access a user has to a campaign.
+ * Users with campaign access can access the campaign even without full calendar access.
+ */
+export interface CampaignPermission {
+  id: string;
+  campaignId: string;
+  userId: string;
+  accessType: 'view' | 'edit';
+  invitedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Extended campaign permission type that includes user info.
+ * Used in campaign sharing UI and permission APIs.
+ */
+export interface ExtendedCampaignPermission extends CampaignPermission {
+  userEmail?: string;
+  userName?: string;
+  inviterName?: string;
+}
+
+/**
+ * Notification types for in-app notifications.
+ */
+export enum NotificationType {
+  CALENDAR_INVITE = 'calendar_invite',
+  CAMPAIGN_INVITE = 'campaign_invite',
+  COMMENT_ADDED = 'comment_added',
+  ACTIVITY_CREATED = 'activity_created',
+  ACTIVITY_UPDATED = 'activity_updated',
+  PERMISSION_CHANGED = 'permission_changed',
+}
+
+/**
+ * Related entity types for notifications.
+ */
+export enum NotificationRelatedType {
+  CALENDAR = 'calendar',
+  CAMPAIGN = 'campaign',
+  ACTIVITY = 'activity',
+  COMMENT = 'comment',
+}
+
+/**
+ * In-app notification for collaboration events.
+ */
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedType?: NotificationRelatedType;
+  relatedId?: string;
+  read: boolean;
+  createdAt: string;
+}
+
 // ============================================================================
 // UNDO/REDO TYPES
 // ============================================================================
@@ -351,3 +414,95 @@ export interface BulkOperationConfig {
   targetCampaignId?: string;
   targetRegion?: Region;
 }
+
+// ============================================================================
+// CARD DISPLAY CONFIGURATION TYPES
+// ============================================================================
+
+/**
+ * Font size options for card field styling.
+ * Maps to specific pixel values: xs=9px, sm=11px, base=13px, lg=15px
+ */
+export type CardFontSize = 'xs' | 'sm' | 'base' | 'lg';
+
+/**
+ * Font weight options for card field styling.
+ */
+export type CardFontWeight = 'normal' | 'bold' | 'black';
+
+/**
+ * Style configuration for a single field on an activity card.
+ */
+export interface FieldStyle {
+  visible: boolean;
+  fontSize: CardFontSize;
+  fontWeight: CardFontWeight;
+  uppercase: boolean;
+}
+
+/**
+ * Display configuration profile for activity cards.
+ * Profiles allow quick switching between different card display styles.
+ */
+export interface CardDisplayProfile {
+  id: string;
+  name: string;
+  isBuiltIn: boolean;  // Built-in profiles cannot be deleted
+  cardHeight: number;  // Height in pixels (e.g., 32, 52, 68, 84)
+  fields: {
+    title: FieldStyle;
+    region: FieldStyle;
+    status: FieldStyle;
+    statusDot: { visible: boolean };  // Just visibility, no text styling
+    cost: FieldStyle;
+    dates: FieldStyle;  // Date range display (e.g., "Jan 15 - Feb 20")
+  };
+}
+
+/**
+ * Default built-in profiles for card display.
+ */
+export const DEFAULT_CARD_PROFILES: CardDisplayProfile[] = [
+  {
+    id: 'compact',
+    name: 'Compact',
+    isBuiltIn: true,
+    cardHeight: 32,
+    fields: {
+      title: { visible: true, fontSize: 'sm', fontWeight: 'bold', uppercase: true },
+      region: { visible: false, fontSize: 'xs', fontWeight: 'bold', uppercase: true },
+      status: { visible: false, fontSize: 'xs', fontWeight: 'bold', uppercase: false },
+      statusDot: { visible: false },
+      cost: { visible: false, fontSize: 'xs', fontWeight: 'black', uppercase: false },
+      dates: { visible: false, fontSize: 'xs', fontWeight: 'normal', uppercase: false },
+    },
+  },
+  {
+    id: 'detailed',
+    name: 'Detailed',
+    isBuiltIn: true,
+    cardHeight: 68,
+    fields: {
+      title: { visible: true, fontSize: 'sm', fontWeight: 'black', uppercase: true },
+      region: { visible: true, fontSize: 'xs', fontWeight: 'black', uppercase: true },
+      status: { visible: true, fontSize: 'xs', fontWeight: 'bold', uppercase: false },
+      statusDot: { visible: true },
+      cost: { visible: true, fontSize: 'xs', fontWeight: 'black', uppercase: false },
+      dates: { visible: false, fontSize: 'xs', fontWeight: 'normal', uppercase: false },
+    },
+  },
+  {
+    id: 'print',
+    name: 'Print',
+    isBuiltIn: true,
+    cardHeight: 84,
+    fields: {
+      title: { visible: true, fontSize: 'lg', fontWeight: 'black', uppercase: true },
+      region: { visible: true, fontSize: 'sm', fontWeight: 'bold', uppercase: true },
+      status: { visible: true, fontSize: 'sm', fontWeight: 'bold', uppercase: false },
+      statusDot: { visible: true },
+      cost: { visible: true, fontSize: 'sm', fontWeight: 'black', uppercase: false },
+      dates: { visible: true, fontSize: 'sm', fontWeight: 'normal', uppercase: false },
+    },
+  },
+];
