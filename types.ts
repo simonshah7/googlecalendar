@@ -286,6 +286,69 @@ export interface ActivityHistoryEntry {
   createdAt: string;
 }
 
+/**
+ * Campaign permission for sharing access to specific campaigns.
+ *
+ * Defines what level of access a user has to a campaign.
+ * Users with campaign access can access the campaign even without full calendar access.
+ */
+export interface CampaignPermission {
+  id: string;
+  campaignId: string;
+  userId: string;
+  accessType: 'view' | 'edit';
+  invitedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Extended campaign permission type that includes user info.
+ * Used in campaign sharing UI and permission APIs.
+ */
+export interface ExtendedCampaignPermission extends CampaignPermission {
+  userEmail?: string;
+  userName?: string;
+  inviterName?: string;
+}
+
+/**
+ * Notification types for in-app notifications.
+ */
+export enum NotificationType {
+  CALENDAR_INVITE = 'calendar_invite',
+  CAMPAIGN_INVITE = 'campaign_invite',
+  COMMENT_ADDED = 'comment_added',
+  ACTIVITY_CREATED = 'activity_created',
+  ACTIVITY_UPDATED = 'activity_updated',
+  PERMISSION_CHANGED = 'permission_changed',
+}
+
+/**
+ * Related entity types for notifications.
+ */
+export enum NotificationRelatedType {
+  CALENDAR = 'calendar',
+  CAMPAIGN = 'campaign',
+  ACTIVITY = 'activity',
+  COMMENT = 'comment',
+}
+
+/**
+ * In-app notification for collaboration events.
+ */
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedType?: NotificationRelatedType;
+  relatedId?: string;
+  read: boolean;
+  createdAt: string;
+}
+
 // ============================================================================
 // UNDO/REDO TYPES
 // ============================================================================
