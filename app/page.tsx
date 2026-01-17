@@ -5,6 +5,9 @@ import { eq } from 'drizzle-orm';
 import AppShell from '@/components/AppShell';
 import { UserRole, CampaignStatus, Currency, Region } from '@/types';
 
+// Force dynamic rendering - this page requires database access
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const user = await getCurrentUser();
 
