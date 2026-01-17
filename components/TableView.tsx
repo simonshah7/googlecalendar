@@ -151,7 +151,8 @@ const TableView: React.FC<TableViewProps> = ({
                       <input
                         type="checkbox"
                         checked={isSelected || false}
-                        onChange={(e) => onSelectActivity(activity.id, e.shiftKey)}
+                        onChange={() => {}}
+                        onClick={(e) => onSelectActivity(activity.id, e.shiftKey)}
                         className="w-4 h-4 text-indigo-600 border-gray-300 dark:border-valuenova-border rounded focus:ring-indigo-500 dark:focus:ring-valuenova-accent cursor-pointer"
                       />
                     </td>
