@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Activity, Swimlane, CampaignStatus } from '../types';
 import { SWIMLANE_COLORS } from '../constants';
+import EmptyState from './EmptyState';
 
 const ZOOM_LEVELS = [4, 8, 12, 20, 30]; // pixels per day
 const DEFAULT_ZOOM_INDEX = 2; // Corresponds to 12px
@@ -35,6 +36,14 @@ interface TimelineViewProps {
   onQuickAdd: (startDate: string, endDate: string, swimlaneId: string) => void;
   onDuplicate: (activityId: string) => void;
   readOnly?: boolean;
+  selectedActivities?: Set<string>;
+  onSelectActivity?: (id: string, isShiftClick: boolean) => void;
+}
+
+export interface TimelineViewRef {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  goToToday: () => void;
 }
 
 const ActivityBar: React.FC<{
@@ -52,13 +61,15 @@ const ActivityBar: React.FC<{
   colorClasses: string;
   draggingOffset?: { x: number; y: number };
   readOnly?: boolean;
-}> = ({ activity, timelineStartDate, top, density, onMouseDown, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly }) => {
+  isSelected?: boolean;
+  onSelect?: (id: string, isShiftClick: boolean) => void;
+}> = ({ activity, timelineStartDate, top, density, onMouseDown, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect }) => {
   const startOffsetDays = diffDaysUTC(formatDate(timelineStartDate), activity.startDate);
   const durationDays = diffDaysUTC(activity.startDate, activity.endDate) + 1;
 
   const left = startOffsetDays * dayWidth;
   const width = Math.max(durationDays * dayWidth, 2);
-  
+
   const barHeight = density === 'compact' ? 32 : 68;
 
   const barStyle: React.CSSProperties = {
@@ -84,8 +95,9 @@ const ActivityBar: React.FC<{
   return (
     <div
       id={isGhost ? `ghost-${activity.id}` : `activity-${activity.id}`}
-      className={`absolute rounded-lg shadow-sm border group flex flex-col ${activity.color ? '' : colorClasses} 
-        ${isDragging ? 'shadow-2xl scale-105 cursor-grabbing ring-2 ring-indigo-500/50' : isGhost ? 'border-dashed border-indigo-400 pointer-events-none' : `border-black/5 dark:border-white/10 hover:shadow-md hover:scale-[1.01] transition-all duration-200 ${readOnly ? 'cursor-default' : 'cursor-grab'}`}`}
+      className={`absolute rounded-lg shadow-sm border group flex flex-col ${activity.color ? '' : colorClasses}
+        ${isDragging ? 'shadow-2xl scale-105 cursor-grabbing ring-2 ring-indigo-500/50' : isGhost ? 'border-dashed border-indigo-400 pointer-events-none' : `border-black/5 dark:border-white/10 hover:shadow-md hover:scale-[1.01] transition-all duration-200 ${readOnly ? 'cursor-default' : 'cursor-grab'}`}
+        ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
       style={barStyle}
       onMouseDown={(e) => {
         if (isGhost || readOnly) return;
@@ -97,7 +109,12 @@ const ActivityBar: React.FC<{
         e.stopPropagation();
         onDoubleClick(activity);
       }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onSelect && !isGhost) {
+          onSelect(activity.id, e.shiftKey);
+        }
+      }}
     >
       {!isGhost && !readOnly && (
         <>
@@ -105,7 +122,7 @@ const ActivityBar: React.FC<{
           <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-30" onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, activity, 'resize-right'); }} />
         </>
       )}
-      
+
       <div className="px-3 py-2 h-full flex flex-col justify-center overflow-hidden pointer-events-none">
         <div className="flex items-center gap-2 mb-1">
           {density === 'detailed' && getStatusDot(activity.status)}
@@ -141,16 +158,14 @@ const ActivityBar: React.FC<{
             className="p-1 rounded-full text-gray-800 hover:bg-white/40 focus:outline-none transition-colors"
             title="Duplicate"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012-2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
           </button>
           <button
             onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
             onClick={e => {
               e.preventDefault();
               e.stopPropagation();
-              if(window.confirm('Delete this activity?')) {
-                onDelete(activity.id);
-              }
+              onDelete(activity.id);
             }}
             className="p-1 rounded-full text-red-700 hover:bg-red-100/40 focus:outline-none transition-colors"
             title="Delete"
@@ -163,15 +178,75 @@ const ActivityBar: React.FC<{
   );
 };
 
-const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEdit, onUpdate, onDeleteActivity, onAddSwimlane, onUpdateSwimlane, onDeleteSwimlane, onReorderSwimlanes, onQuickAdd, onDuplicate, readOnly }) => {
+// Dependency arrow component
+const DependencyArrow: React.FC<{
+  fromActivity: Activity;
+  toActivity: Activity;
+  timelineStartDate: Date;
+  dayWidth: number;
+  swimlaneOffsets: Record<string, { top: number; height: number }>;
+  barHeight: number;
+}> = ({ fromActivity, toActivity, timelineStartDate, dayWidth, swimlaneOffsets, barHeight }) => {
+  const fromEndDays = diffDaysUTC(formatDate(timelineStartDate), fromActivity.endDate);
+  const toStartDays = diffDaysUTC(formatDate(timelineStartDate), toActivity.startDate);
+
+  const fromX = (fromEndDays + 1) * dayWidth;
+  const toX = toStartDays * dayWidth;
+
+  const fromOffset = swimlaneOffsets[fromActivity.swimlaneId];
+  const toOffset = swimlaneOffsets[toActivity.swimlaneId];
+  if (!fromOffset || !toOffset) return null;
+
+  const fromY = fromOffset.top + barHeight / 2 + 24;
+  const toY = toOffset.top + barHeight / 2 + 24;
+
+  const midX = (fromX + toX) / 2;
+
+  return (
+    <svg
+      className="absolute top-0 left-0 pointer-events-none overflow-visible"
+      style={{ width: '100%', height: '100%' }}
+    >
+      <defs>
+        <marker
+          id="arrowhead"
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" />
+        </marker>
+      </defs>
+      <path
+        d={`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`}
+        stroke="#6366f1"
+        strokeWidth="2"
+        fill="none"
+        strokeDasharray="4 2"
+        markerEnd="url(#arrowhead)"
+        opacity="0.6"
+      />
+    </svg>
+  );
+};
+
+const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
+  activities, swimlanes, onEdit, onUpdate, onDeleteActivity, onAddSwimlane, onUpdateSwimlane, onDeleteSwimlane, onReorderSwimlanes, onQuickAdd, onDuplicate, readOnly,
+  selectedActivities, onSelectActivity
+}, ref) => {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [density, setDensity] = useState<Density>('detailed');
   const [swimlaneHeights, setSwimlaneHeights] = useState<Record<string, number>>({});
   const dayWidth = ZOOM_LEVELS[zoomIndex];
-  
-  const timelineStartDate = new Date(2025, 0, 1);
-  const timelineEndDate = new Date(2025, 11, 31);
-  
+
+  // Dynamic timeline based on current year
+  const currentYear = new Date().getFullYear();
+  const timelineStartDate = new Date(currentYear, 0, 1);
+  const timelineEndDate = new Date(currentYear, 11, 31);
+  const today = new Date();
+
   const [dragState, setDragState] = useState<{
     activity: Activity;
     mode: 'drag' | 'resize-left' | 'resize-right';
@@ -197,6 +272,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  // Expose methods via ref for keyboard shortcuts
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => setZoomIndex(prev => Math.min(ZOOM_LEVELS.length - 1, prev + 1)),
+    zoomOut: () => setZoomIndex(prev => Math.max(0, prev - 1)),
+    goToToday: () => {
+      if (containerRef.current) {
+        const todayOffset = diffDaysUTC(formatDate(timelineStartDate), formatDate(today)) * dayWidth;
+        containerRef.current.scrollLeft = todayOffset - containerRef.current.clientWidth / 2;
+      }
+    }
+  }), [dayWidth, timelineStartDate, today]);
+
   const months = useMemo(() => {
     const m = [];
     let curr = new Date(timelineStartDate);
@@ -218,7 +305,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
       const swimlaneActivities = activities
         .filter(a => a.swimlaneId === swimlane.id)
         .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-      
+
       const rows: Activity[][] = [];
       swimlaneActivities.forEach(activity => {
         let placed = false;
@@ -240,14 +327,14 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
   const swimlaneOffsets = useMemo(() => {
     let currentOffset = 0;
     const offsets: Record<string, { top: number; height: number }> = {};
-    
+
     swimlanes.forEach(swimlane => {
       const rows = swimlaneLayouts[swimlane.id] || [];
       const barHeight = density === 'compact' ? 32 : 68;
       const rowHeight = barHeight + 12;
       const minHeight = Math.max(1, rows.length) * rowHeight + 48;
       const height = swimlaneHeights[swimlane.id] || minHeight;
-      
+
       offsets[swimlane.id] = { top: currentOffset, height };
       currentOffset += height;
     });
@@ -260,6 +347,33 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
         return acc;
     }, {} as Record<string, string>);
   }, [swimlanes]);
+
+  // Calculate swimlane budget usage
+  const swimlaneBudgetUsage = useMemo(() => {
+    const usage: Record<string, { used: number; budget: number }> = {};
+    swimlanes.forEach(swimlane => {
+      const swimlaneActivities = activities.filter(a => a.swimlaneId === swimlane.id);
+      const used = swimlaneActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
+      usage[swimlane.id] = { used, budget: swimlane.budget || 0 };
+    });
+    return usage;
+  }, [activities, swimlanes]);
+
+  // Get dependencies to render
+  const dependencyPairs = useMemo(() => {
+    const pairs: { from: Activity; to: Activity }[] = [];
+    activities.forEach(activity => {
+      if (activity.dependencies && activity.dependencies.length > 0) {
+        activity.dependencies.forEach(depId => {
+          const depActivity = activities.find(a => a.id === depId);
+          if (depActivity) {
+            pairs.push({ from: depActivity, to: activity });
+          }
+        });
+      }
+    });
+    return pairs;
+  }, [activities]);
 
   const handleMouseDown = (e: React.MouseEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => {
     if (readOnly) return;
@@ -309,11 +423,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
   const handleSwimlaneDrop = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (draggedSwimlaneIndex === null) return;
-    
+
     const newSwimlanes = [...swimlanes];
     const [removed] = newSwimlanes.splice(draggedSwimlaneIndex, 1);
     newSwimlanes.splice(index, 0, removed);
-    
+
     onReorderSwimlanes(newSwimlanes);
     setDraggedSwimlaneIndex(null);
     setDragOverSwimlaneIndex(null);
@@ -324,10 +438,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
       if (dragState) {
         const deltaX = e.clientX - dragState.startX;
         const deltaY = e.clientY - dragState.startY;
-        
+
         const deltaDays = Math.round(deltaX / dayWidth);
         const { activity, mode, initialStart, initialEnd } = dragState;
-        
+
         let newStart = initialStart;
         let newEnd = initialEnd;
         let newSwimlaneId = dragState.initialSwimlaneId;
@@ -335,16 +449,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
         if (mode === 'drag') {
           newStart = formatDate(addDays(new Date(initialStart), deltaDays));
           newEnd = formatDate(addDays(new Date(initialEnd), deltaDays));
-          
+
           if (canvasRef.current) {
             const canvasRect = canvasRef.current.getBoundingClientRect();
             const relativeY = e.clientY - canvasRect.top;
-            
+
             const targetSwimlane = swimlanes.find(s => {
               const bounds = swimlaneOffsets[s.id];
               return relativeY >= bounds.top && relativeY <= (bounds.top + bounds.height);
             });
-            
+
             if (targetSwimlane) {
                 newSwimlaneId = targetSwimlane.id;
             }
@@ -357,9 +471,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
           if (newEnd < newStart) newEnd = newStart;
         }
 
-        setDragState(prev => prev ? ({ 
-          ...prev, 
-          deltaX, 
+        setDragState(prev => prev ? ({
+          ...prev,
+          deltaX,
           deltaY,
           ghostActivity: {
             ...prev.activity,
@@ -383,8 +497,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
     const handleGlobalMouseUp = () => {
       if (dragState && dragState.ghostActivity) {
         const { ghostActivity } = dragState;
-        if (ghostActivity.startDate !== dragState.activity.startDate || 
-            ghostActivity.endDate !== dragState.activity.endDate || 
+        if (ghostActivity.startDate !== dragState.activity.startDate ||
+            ghostActivity.endDate !== dragState.activity.endDate ||
             ghostActivity.swimlaneId !== dragState.activity.swimlaneId) {
           onUpdate(ghostActivity);
         }
@@ -419,27 +533,61 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
     onUpdateSwimlane({ ...swimlane, name: newName });
   };
 
+  // Calculate today line position
+  const todayOffset = diffDaysUTC(formatDate(timelineStartDate), formatDate(today)) * dayWidth;
+  const showTodayLine = today >= timelineStartDate && today <= timelineEndDate;
+
+  const barHeight = density === 'compact' ? 32 : 68;
+
+  if (swimlanes.length === 0) {
+    return (
+      <div className="flex flex-col h-full bg-white dark:bg-valuenova-bg transition-colors duration-300">
+        <EmptyState
+          title="No Swimlanes Yet"
+          description="Create your first swimlane to start organizing your campaign activities on the timeline."
+          actionLabel="Add Swimlane"
+          onAction={onAddSwimlane}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-valuenova-bg transition-colors duration-300">
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-valuenova-border bg-gray-50/30 dark:bg-valuenova-bg transition-colors">
         <div className="flex items-center gap-4">
             <div className="flex items-center bg-white dark:bg-valuenova-surface p-1 rounded-lg border border-gray-200 dark:border-valuenova-border shadow-sm">
-                <button onClick={() => setZoomIndex(Math.max(0, zoomIndex - 1))} className="p-1.5 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-md text-gray-500 dark:text-valuenova-muted transition-colors"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg></button>
+                <button onClick={() => setZoomIndex(Math.max(0, zoomIndex - 1))} className="p-1.5 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-md text-gray-500 dark:text-valuenova-muted transition-colors" title="Zoom out (-)"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg></button>
                 <span className="text-[10px] font-black uppercase tracking-widest px-3 text-gray-400 dark:text-valuenova-muted min-w-[80px] text-center">Zoom {Math.round((dayWidth/12)*100)}%</span>
-                <button onClick={() => setZoomIndex(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))} className="p-1.5 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-md text-gray-500 dark:text-valuenova-muted transition-colors"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg></button>
+                <button onClick={() => setZoomIndex(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))} className="p-1.5 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-md text-gray-500 dark:text-valuenova-muted transition-colors" title="Zoom in (+)"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg></button>
             </div>
-            
+
             <div className="flex items-center bg-white dark:bg-valuenova-surface p-1 rounded-lg border border-gray-200 dark:border-valuenova-border shadow-sm">
                 {(['compact', 'detailed'] as Density[]).map(d => (
                     <button
                         key={d}
                         onClick={() => setDensity(d)}
                         className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${density === d ? 'bg-indigo-600 dark:bg-valuenova-accent text-white shadow-md' : 'text-gray-400 dark:text-valuenova-muted hover:text-gray-600 dark:hover:text-white'}`}
+                        title={d === 'compact' ? 'Compact view' : 'Detailed view'}
                     >
                         {d}
                     </button>
                 ))}
             </div>
+
+            {/* Go to Today button */}
+            <button
+              onClick={() => {
+                if (containerRef.current) {
+                  const todayScrollPos = todayOffset - containerRef.current.clientWidth / 2;
+                  containerRef.current.scrollTo({ left: todayScrollPos, behavior: 'smooth' });
+                }
+              }}
+              className="px-3 py-1.5 text-[10px] font-black uppercase bg-white dark:bg-valuenova-surface border border-gray-200 dark:border-valuenova-border rounded-lg text-indigo-600 dark:text-valuenova-accent hover:bg-indigo-50 dark:hover:bg-valuenova-bg transition-colors shadow-sm"
+              title="Go to today (T)"
+            >
+              Today
+            </button>
         </div>
         {readOnly && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/20 rounded-lg">
@@ -457,44 +605,67 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
             const isActivityTarget = dragState?.ghostActivity?.swimlaneId === swimlane.id;
             const isBeingDragged = draggedSwimlaneIndex === index;
             const isDragOver = dragOverSwimlaneIndex === index;
+            const budgetData = swimlaneBudgetUsage[swimlane.id];
+            const budgetPercent = budgetData.budget > 0 ? Math.min(100, (budgetData.used / budgetData.budget) * 100) : 0;
 
             return (
-              <div 
-                key={swimlane.id} 
+              <div
+                key={swimlane.id}
                 draggable={!readOnly}
                 onDragStart={(e) => handleSwimlaneDragStart(e, index)}
                 onDragOver={(e) => handleSwimlaneDragOver(e, index)}
                 onDrop={(e) => handleSwimlaneDrop(e, index)}
                 onDragEnd={() => { setDraggedSwimlaneIndex(null); setDragOverSwimlaneIndex(null); }}
-                className={`group relative flex items-center px-6 border-b border-gray-100 dark:border-valuenova-border transition-all duration-200 
+                className={`group relative flex flex-col justify-center px-6 py-3 border-b border-gray-100 dark:border-valuenova-border transition-all duration-200
                   ${isActivityTarget ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : 'hover:bg-gray-50 dark:hover:bg-valuenova-surface/30'}
                   ${isBeingDragged ? 'opacity-40 grayscale' : 'opacity-100'}
                   ${isDragOver && draggedSwimlaneIndex !== index ? 'border-t-4 border-t-indigo-500' : ''}
-                `} 
+                `}
                 style={{ height: `${height}px` }}
               >
-                {/* Drag Handle */}
-                {!readOnly && (
-                  <div className="mr-3 cursor-grab active:cursor-grabbing text-gray-300 hover:text-indigo-500 transition-colors">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8h16M4 16h16" />
-                    </svg>
+                <div className="flex items-center gap-2">
+                  {/* Drag Handle */}
+                  {!readOnly && (
+                    <div className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-indigo-500 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8h16M4 16h16" />
+                      </svg>
+                    </div>
+                  )}
+
+                  <div className="flex-grow">
+                      <input
+                        type="text"
+                        value={swimlane.name}
+                        onChange={(e) => handleSwimlaneNameChange(swimlane, e.target.value)}
+                        disabled={readOnly}
+                        className={`w-full bg-transparent border-none p-0 font-black text-xs uppercase tracking-wider transition-all focus:ring-1 focus:ring-indigo-500/30 focus:bg-black/5 dark:focus:bg-white/5 rounded px-1 -mx-1 ${isActivityTarget ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-900 dark:text-white'} hover:bg-black/5 dark:hover:bg-white/5 cursor-text`}
+                      />
+                  </div>
+
+                  {!readOnly && (
+                    <button onClick={() => onDeleteSwimlane(swimlane.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-red-500 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                  )}
+                </div>
+
+                {/* Budget display */}
+                {budgetData.budget > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-[9px] mb-1">
+                      <span className="font-bold text-gray-400 dark:text-valuenova-muted">Budget</span>
+                      <span className={`font-black ${budgetPercent > 100 ? 'text-red-500' : budgetPercent > 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                        ${budgetData.used.toLocaleString()} / ${budgetData.budget.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 dark:bg-valuenova-border rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${budgetPercent > 100 ? 'bg-red-500' : budgetPercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${Math.min(100, budgetPercent)}%` }}
+                      />
+                    </div>
                   </div>
                 )}
 
-                <div className="flex-grow">
-                    <input
-                      type="text"
-                      value={swimlane.name}
-                      onChange={(e) => handleSwimlaneNameChange(swimlane, e.target.value)}
-                      disabled={readOnly}
-                      className={`w-full bg-transparent border-none p-0 font-black text-xs uppercase tracking-wider transition-all focus:ring-1 focus:ring-indigo-500/30 focus:bg-black/5 dark:focus:bg-white/5 rounded px-1 -mx-1 ${isActivityTarget ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-900 dark:text-white'} hover:bg-black/5 dark:hover:bg-white/5 cursor-text`}
-                    />
-                </div>
-                
-                {!readOnly && (
-                  <button onClick={() => onDeleteSwimlane(swimlane.id)} className="absolute right-4 opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-red-500 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                )}
                 {!readOnly && (
                   <div className="absolute bottom-0 left-0 w-full h-1 cursor-ns-resize hover:bg-indigo-400 dark:hover:bg-valuenova-accent transition-colors z-40" onMouseDown={(e) => startSwimlaneResize(e, swimlane.id, height)} />
                 )}
@@ -510,6 +681,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
         </div>
 
         <div className="relative" style={{ width: `${totalWidth}px` }} ref={canvasRef}>
+          {/* Today line */}
+          {showTodayLine && (
+            <div
+              className="absolute top-0 h-full w-0.5 bg-red-500 z-20 pointer-events-none"
+              style={{ left: `${todayOffset}px` }}
+            >
+              <div className="absolute -top-0 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-red-500 text-white text-[9px] font-black uppercase rounded-b-md whitespace-nowrap">
+                Today
+              </div>
+            </div>
+          )}
+
           <div className="flex h-16 sticky top-0 z-20 bg-white/95 dark:bg-valuenova-bg/95 backdrop-blur-sm border-b border-gray-100 dark:border-valuenova-border transition-colors">
             {months.map(monthDate => {
               const daysInMonth = getDaysInMonth(monthDate.getFullYear(), monthDate.getMonth());
@@ -527,25 +710,37 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
               <div key={`line-${monthDate.toISOString()}`} className="absolute top-0 h-full border-r border-gray-50 dark:border-valuenova-border/10 pointer-events-none" style={{ left: `${diffDaysUTC(formatDate(timelineStartDate), formatDate(monthDate)) * dayWidth}px` }}></div>
             ))}
 
+            {/* Dependency arrows */}
+            {dependencyPairs.map((pair, idx) => (
+              <DependencyArrow
+                key={`dep-${idx}`}
+                fromActivity={pair.from}
+                toActivity={pair.to}
+                timelineStartDate={timelineStartDate}
+                dayWidth={dayWidth}
+                swimlaneOffsets={swimlaneOffsets}
+                barHeight={barHeight}
+              />
+            ))}
+
             {swimlanes.map((swimlane, index) => {
               const rows = swimlaneLayouts[swimlane.id] || [];
-              const barHeight = density === 'compact' ? 32 : 68;
               const rowHeight = barHeight + 12;
               const height = swimlaneOffsets[swimlane.id].height;
               const isActive = dragState?.ghostActivity?.swimlaneId === swimlane.id;
               const isBeingDragged = draggedSwimlaneIndex === index;
               const isDragOver = dragOverSwimlaneIndex === index;
-              
+
               return (
-                <div 
-                  key={swimlane.id} 
-                  className={`relative border-b border-gray-100 dark:border-valuenova-border/40 transition-colors overflow-visible 
+                <div
+                  key={swimlane.id}
+                  className={`relative border-b border-gray-100 dark:border-valuenova-border/40 transition-colors overflow-visible
                     ${isActive ? 'bg-indigo-50/20 dark:bg-indigo-900/5 ring-1 ring-inset ring-indigo-500/10' : 'hover:bg-gray-50/20 dark:hover:bg-valuenova-surface/5'}
                     ${isBeingDragged ? 'opacity-40 grayscale' : 'opacity-100'}
                     ${isDragOver && draggedSwimlaneIndex !== index ? 'border-t-4 border-t-indigo-500' : ''}
                     ${readOnly ? 'cursor-default' : 'cursor-crosshair'}
-                  `} 
-                  style={{ height: `${height}px` }} 
+                  `}
+                  style={{ height: `${height}px` }}
                   onClick={(e) => handleCanvasClick(e, swimlane.id)}
                 >
                   {/* Render ghost activity first if dragging in this swimlane */}
@@ -585,6 +780,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
                           colorClasses={swimlaneColorMap[activity.swimlaneId]}
                           draggingOffset={isDragging ? { x: dragState!.deltaX, y: dragState!.deltaY } : undefined}
                           readOnly={readOnly}
+                          isSelected={selectedActivities?.has(activity.id)}
+                          onSelect={onSelectActivity}
                         />
                       );
                     })
@@ -597,6 +794,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ activities, swimlanes, onEd
       </div>
     </div>
   );
-};
+});
+
+TimelineView.displayName = 'TimelineView';
 
 export default TimelineView;

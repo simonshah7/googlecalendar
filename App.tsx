@@ -126,18 +126,46 @@ const App: React.FC = () => {
   // ============ ACTIVITY HANDLERS ============
   const handleSaveActivity = (activity: Activity) => {
     if (activity.id) {
-      setActivities(prev => prev.map(a => a.id === activity.id ? activity : a));
+      newActivities = activities.map(a => a.id === activity.id ? activity : a);
+      description = `Updated "${activity.title}"`;
     } else {
       const newAct = { ...activity, id: crypto.randomUUID(), calendarId: activeCalendarId };
-      setActivities(prev => [...prev, newAct]);
+      newActivities = [...activities, newAct];
+      description = `Created "${activity.title}"`;
     }
-    setIsModalOpen(false);
-  };
 
-  const handleDeleteActivity = (id: string) => {
-    setActivities(prev => prev.filter(a => a.id !== id));
+    setActivities(newActivities);
+    saveToHistory(newActivities, description);
     setIsModalOpen(false);
-  };
+  }, [activities, activeCalendarId, saveToHistory]);
+
+  const handleDeleteActivity = useCallback((id: string) => {
+    const activity = activities.find(a => a.id === id);
+    const newActivities = activities.filter(a => a.id !== id);
+    setActivities(newActivities);
+    saveToHistory(newActivities, `Deleted "${activity?.title || 'activity'}"`);
+    setIsModalOpen(false);
+  }, [activities, saveToHistory]);
+
+  const handleDeleteActivityWithConfirm = useCallback((id: string) => {
+    const activity = activities.find(a => a.id === id);
+    showConfirm(
+      'Delete Activity',
+      `Are you sure you want to delete "${activity?.title}"? This action cannot be undone.`,
+      () => handleDeleteActivity(id),
+      'danger'
+    );
+  }, [activities, showConfirm, handleDeleteActivity]);
+
+  const handleDuplicate = useCallback((id: string) => {
+    const activity = activities.find(x => x.id === id);
+    if (activity) {
+      const newActivity = { ...activity, id: crypto.randomUUID(), title: `${activity.title} (Copy)` };
+      const newActivities = [...activities, newActivity];
+      setActivities(newActivities);
+      saveToHistory(newActivities, `Duplicated "${activity.title}"`);
+    }
+  }, [activities, saveToHistory]);
 
   // ============ CAMPAIGN HANDLERS (P1.1) ============
   const handleAddCampaign = (name: string) => {
@@ -410,17 +438,39 @@ const App: React.FC = () => {
               activities={filteredActivities} swimlanes={swimlanes.filter(s => s.calendarId === activeCalendarId)}
               onEdit={(a) => { setEditingActivity(a); setIsModalOpen(true); }}
               onUpdate={handleSaveActivity}
-              onDeleteActivity={handleDeleteActivity}
+              onDeleteActivity={handleDeleteActivityWithConfirm}
               onAddSwimlane={() => {
                 const ns = { id: crypto.randomUUID(), name: 'New Lane', calendarId: activeCalendarId };
                 setSwimlanes(prev => [...prev, ns]);
               }}
               onUpdateSwimlane={(s) => setSwimlanes(prev => prev.map(x => x.id === s.id ? s : x))}
-              onDeleteSwimlane={(id) => setSwimlanes(prev => prev.filter(x => x.id !== id))}
+              onDeleteSwimlane={(id) => {
+                const swimlane = swimlanes.find(s => s.id === id);
+                const hasActivities = activities.some(a => a.swimlaneId === id);
+                if (hasActivities) {
+                  showConfirm(
+                    'Delete Swimlane',
+                    `"${swimlane?.name}" contains activities. Delete the swimlane and move activities to the first swimlane?`,
+                    () => {
+                      const firstSwimlane = swimlanes.find(s => s.id !== id);
+                      if (firstSwimlane) {
+                        setActivities(prev => prev.map(a => a.swimlaneId === id ? { ...a, swimlaneId: firstSwimlane.id } : a));
+                      }
+                      setSwimlanes(prev => prev.filter(x => x.id !== id));
+                    },
+                    'warning'
+                  );
+                } else {
+                  setSwimlanes(prev => prev.filter(x => x.id !== id));
+                }
+              }}
               onReorderSwimlanes={setSwimlanes}
               onQuickAdd={(s, e, sw) => handleSaveActivity({ id: '', title: 'New Activity', startDate: s, endDate: e, swimlaneId: sw, calendarId: activeCalendarId, status: CampaignStatus.Considering, cost: 0, currency: Currency.USD, region: Region.US, typeId: activityTypes[0]?.id || '', campaignId: campaigns[0]?.id || '', description: '', tags: '', vendorId: vendors[0]?.id || '', expectedSAOs: 0, actualSAOs: 0 })}
               onDuplicate={(id) => { const a = activities.find(x => x.id === id); if(a) handleSaveActivity({ ...a, id: '', title: `${a.title} (Copy)` }); }}
               readOnly={false}
+              selectedActivities={selectedActivities}
+              onSelectActivity={toggleSelectActivity}
+              ref={timelineZoomRef}
             />
           )}
           {view === 'calendar' && (
@@ -544,6 +594,52 @@ const App: React.FC = () => {
           }}
         />
       )}
+
+      {isSettingsOpen && activeCalendar && (
+        <CalendarSettingsModal
+          calendar={activeCalendar}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={handleUpdateCalendar}
+          onDelete={handleDeleteCalendar}
+          permissions={permissions}
+          onUpdatePermissions={setPermissions}
+          currentUser={currentUser}
+        />
+      )}
+
+      {isAdminOpen && (
+        <ManagerDashboard
+          onClose={() => setIsAdminOpen(false)}
+          users={users}
+          onUpdateUsers={setUsers}
+          calendars={calendars}
+          onUpdateCalendars={setCalendars}
+          activities={activities}
+          onCalendarAction={(calId) => {
+            setActiveCalendarId(calId);
+            setIsAdminOpen(false);
+          }}
+        />
+      )}
+
+      {isShortcutsOpen && (
+        <KeyboardShortcutsHelp
+          isOpen={isShortcutsOpen}
+          onClose={() => setIsShortcutsOpen(false)}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        onConfirm={() => {
+          confirmDialog.onConfirm();
+          closeConfirm();
+        }}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };

@@ -96,8 +96,25 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
 
   const handleDateChange = (name: 'startDate' | 'endDate', value: string) => {
     if (readOnly) return;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+
+      // Date validation: Auto-adjust end date if it's before start date
+      if (name === 'startDate' && newData.endDate && value > newData.endDate) {
+        newData.endDate = value;
+      }
+      // Date validation: Auto-adjust start date if end date is set before it
+      if (name === 'endDate' && newData.startDate && value < newData.startDate) {
+        newData.startDate = value;
+      }
+
+      return newData;
+    });
   };
+
+  // Check if dates are valid
+  const isDateRangeValid = !formData.startDate || !formData.endDate || formData.startDate <= formData.endDate;
 
   const handleAddAttachment = (file: Omit<Attachment, 'id'>) => {
     if (readOnly) return;
@@ -350,7 +367,7 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
         <div className="px-8 py-6 border-t border-gray-100 dark:border-valuenova-border flex justify-between items-center bg-white dark:bg-valuenova-surface">
           <div>
             {activity?.id && onDelete && !readOnly && (
-                <button type="button" onClick={() => { if(window.confirm('Delete this initiative permanently?')) onDelete(activity.id as string); }} className="px-5 py-2.5 text-xs font-black text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest">
+                <button type="button" onClick={() => onDelete(activity.id as string)} className="px-5 py-2.5 text-xs font-black text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   Delete
                 </button>
