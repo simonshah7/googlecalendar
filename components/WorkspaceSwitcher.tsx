@@ -8,12 +8,13 @@ interface WorkspaceSwitcherProps {
   onSwitch: (id: string) => void;
   onClose: () => void;
   onAddCalendar: (name: string) => void;
+  onDeleteCalendar?: (id: string) => void;
   user: User | null;
   permissions: CalendarPermission[];
 }
 
-const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ 
-  calendars, activeCalendarId, onSwitch, onClose, onAddCalendar, user, permissions 
+const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
+  calendars, activeCalendarId, onSwitch, onClose, onAddCalendar, onDeleteCalendar, user, permissions
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newCalName, setNewCalName] = useState('');
@@ -47,16 +48,18 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
 
         <div className="flex-grow overflow-y-auto p-4 space-y-2">
           {visibleCalendars.map(cal => (
-            <button
+            <div
               key={cal.id}
-              onClick={() => { onSwitch(cal.id); onClose(); }}
               className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between group
-                ${activeCalendarId === cal.id 
-                  ? 'bg-indigo-50 dark:bg-valuenova-surface border-indigo-200 dark:border-valuenova-accent shadow-sm' 
+                ${activeCalendarId === cal.id
+                  ? 'bg-indigo-50 dark:bg-valuenova-surface border-indigo-200 dark:border-valuenova-accent shadow-sm'
                   : 'bg-white dark:bg-valuenova-surface border-gray-100 dark:border-valuenova-border hover:border-indigo-200 dark:hover:border-valuenova-accent/50'}
               `}
             >
-              <div className="flex items-center gap-4">
+              <button
+                onClick={() => { onSwitch(cal.id); onClose(); }}
+                className="flex items-center gap-4 flex-grow text-left"
+              >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm
                   ${activeCalendarId === cal.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-valuenova-bg text-gray-400 dark:text-valuenova-muted'}
                 `}>
@@ -68,11 +71,28 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                   </span>
                   <span className="text-[10px] font-bold text-gray-400">Created {new Date(cal.createdAt).toLocaleDateString()}</span>
                 </div>
+              </button>
+              <div className="flex items-center gap-2">
+                {activeCalendarId === cal.id && (
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm animate-pulse"></div>
+                )}
+                {onDeleteCalendar && calendars.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Delete "${cal.name}"? This will remove all activities in this calendar.`)) {
+                        onDeleteCalendar(cal.id);
+                      }
+                    }}
+                    className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
-              {activeCalendarId === cal.id && (
-                <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm animate-pulse"></div>
-              )}
-            </button>
+            </div>
           ))}
         </div>
 

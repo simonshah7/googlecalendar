@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --valuenova-bg: #0B0E14;
+  --valuenova-surface: #161B22;
+  --valuenova-border: #30363D;
+  --valuenova-accent: #58A6FF;
+  --valuenova-text: #C9D1D9;
+  --valuenova-muted: #8B949E;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+.dark {
+  --background: var(--valuenova-bg);
+  --foreground: var(--valuenova-text);
+}
+
+/* Scrollbar styling */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
