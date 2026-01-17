@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Activity, Campaign, ActivityType, Currency } from '../types';
 import { STATUS_COLORS } from '../constants';
 import EmptyState from './EmptyState';
@@ -11,6 +11,7 @@ interface TableViewProps {
   onEdit: (activity: Activity) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onReorderActivities?: (activityIds: string[]) => void;
   exchangeRates: Record<Currency, number>; // Base is USD = 1
   displayCurrency: Currency;
   selectedActivities?: Set<string>;
@@ -29,12 +30,17 @@ const TableView: React.FC<TableViewProps> = ({
   onEdit,
   onDuplicate,
   onDelete,
+  onReorderActivities,
   exchangeRates,
   displayCurrency,
   selectedActivities,
   onSelectActivity
 }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'startDate', direction: 'asc' });
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isManualOrder, setIsManualOrder] = useState(false);
+  const dragRef = useRef<{ startY: number; index: number } | null>(null);
 
   const campaignMap = useMemo(() => {
     return campaigns.reduce((acc, c) => ({ ...acc, [c.id]: c.name }), {} as Record<string, string>);
@@ -82,10 +88,86 @@ const TableView: React.FC<TableViewProps> = ({
   }, [activities, sortConfig, campaignMap, typeMap]);
 
   const handleSort = (key: keyof Activity | 'campaign' | 'type') => {
+    setIsManualOrder(false); // Reset to automatic sorting
     setSortConfig(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
     }));
+  };
+
+  // Drag-and-drop handlers for row reordering
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (!onReorderActivities) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || !onReorderActivities) return;
+    if (index !== dragOverIndex) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || !onReorderActivities) return;
+
+    const newOrder = [...sortedActivities];
+    const [removed] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(dropIndex, 0, removed);
+
+    setIsManualOrder(true);
+    onReorderActivities(newOrder.map(a => a.id));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Touch handlers for mobile drag-and-drop
+  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    if (!onReorderActivities) return;
+    const touch = e.touches[0];
+    dragRef.current = { startY: touch.clientY, index };
+    setDraggedIndex(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (dragRef.current === null || !onReorderActivities) return;
+    const touch = e.touches[0];
+    const rowElements = document.querySelectorAll('[data-row-index]');
+
+    rowElements.forEach((el, idx) => {
+      const rect = el.getBoundingClientRect();
+      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+        setDragOverIndex(idx);
+      }
+    });
+  };
+
+  const handleTouchEnd = () => {
+    if (dragRef.current === null || dragOverIndex === null || !onReorderActivities) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      dragRef.current = null;
+      return;
+    }
+
+    const newOrder = [...sortedActivities];
+    const [removed] = newOrder.splice(dragRef.current.index, 1);
+    newOrder.splice(dragOverIndex, 0, removed);
+
+    setIsManualOrder(true);
+    onReorderActivities(newOrder.map(a => a.id));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    dragRef.current = null;
   };
 
   const SortIcon = ({ column }: { column: string }) => {
@@ -110,6 +192,11 @@ const TableView: React.FC<TableViewProps> = ({
         <table className="min-w-full divide-y divide-gray-200 dark:divide-valuenova-border table-fixed md:table-auto border-separate border-spacing-0">
           <thead className="bg-gray-50 dark:bg-valuenova-bg sticky top-0 z-10">
             <tr>
+              {onReorderActivities && (
+                <th scope="col" className="w-10 px-2 py-3 text-center">
+                  <span className="sr-only">Reorder</span>
+                </th>
+              )}
               {onSelectActivity && (
                 <th scope="col" className="w-12 px-4 py-3 text-center">
                   <span className="sr-only">Select</span>
@@ -139,13 +226,37 @@ const TableView: React.FC<TableViewProps> = ({
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-valuenova-surface divide-y divide-gray-200 dark:divide-valuenova-border transition-colors">
-            {sortedActivities.map((activity) => {
+            {sortedActivities.map((activity, index) => {
               const isSelected = selectedActivities?.has(activity.id);
+              const isDragging = draggedIndex === index;
+              const isDragOver = dragOverIndex === index && draggedIndex !== index;
               return (
                 <tr
                   key={activity.id}
-                  className={`hover:bg-gray-50 dark:hover:bg-valuenova-bg transition-colors ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+                  data-row-index={index}
+                  draggable={!!onReorderActivities}
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onTouchStart={(e) => handleTouchStart(e, index)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  className={`hover:bg-gray-50 dark:hover:bg-valuenova-bg transition-colors
+                    ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}
+                    ${isDragging ? 'opacity-50 bg-gray-100 dark:bg-valuenova-bg' : ''}
+                    ${isDragOver ? 'border-t-2 border-t-indigo-500' : ''}
+                    ${onReorderActivities ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 >
+                  {onReorderActivities && (
+                    <td className="px-2 py-4 text-center touch-none">
+                      <div className="text-gray-300 hover:text-indigo-500 transition-colors cursor-grab">
+                        <svg className="w-4 h-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8h16M4 16h16" />
+                        </svg>
+                      </div>
+                    </td>
+                  )}
                   {onSelectActivity && (
                     <td className="px-4 py-4 text-center">
                       <input
@@ -214,7 +325,7 @@ const TableView: React.FC<TableViewProps> = ({
           </tbody>
           <tfoot className="sticky bottom-0 z-10 bg-gray-50 dark:bg-valuenova-surface border-t-2 border-gray-200 dark:border-valuenova-border shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <tr>
-              <td colSpan={onSelectActivity ? 4 : 3} className="px-6 py-4 text-xs font-black text-gray-500 dark:text-valuenova-muted uppercase tracking-widest">
+              <td colSpan={(onReorderActivities ? 1 : 0) + (onSelectActivity ? 1 : 0) + 3} className="px-6 py-4 text-xs font-black text-gray-500 dark:text-valuenova-muted uppercase tracking-widest">
                 Totals for current view ({sortedActivities.length} activities)
               </td>
               <td className="px-6 py-4 text-right">

@@ -52,6 +52,7 @@ const ActivityBar: React.FC<{
   top: number;
   density: Density;
   onMouseDown: (e: React.MouseEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
+  onTouchStart: (e: React.TouchEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => void;
   onDoubleClick: (activity: Activity) => void;
   onDuplicate: (activityId: string) => void;
   onDelete: (id: string) => void;
@@ -63,7 +64,7 @@ const ActivityBar: React.FC<{
   readOnly?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string, isShiftClick: boolean) => void;
-}> = ({ activity, timelineStartDate, top, density, onMouseDown, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect }) => {
+}> = ({ activity, timelineStartDate, top, density, onMouseDown, onTouchStart, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect }) => {
   const startOffsetDays = diffDaysUTC(formatDate(timelineStartDate), activity.startDate);
   const durationDays = diffDaysUTC(activity.startDate, activity.endDate) + 1;
 
@@ -104,6 +105,10 @@ const ActivityBar: React.FC<{
         if (e.button !== 0) return;
         onMouseDown(e, activity, 'drag');
       }}
+      onTouchStart={(e) => {
+        if (isGhost || readOnly) return;
+        onTouchStart(e, activity, 'drag');
+      }}
       onDoubleClick={(e) => {
         if (isGhost) return;
         e.stopPropagation();
@@ -118,8 +123,16 @@ const ActivityBar: React.FC<{
     >
       {!isGhost && !readOnly && (
         <>
-          <div className="absolute left-0 top-0 h-full w-2 cursor-ew-resize z-30" onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, activity, 'resize-left'); }} />
-          <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-30" onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, activity, 'resize-right'); }} />
+          <div
+            className="absolute left-0 top-0 h-full w-4 cursor-ew-resize z-30 touch-none"
+            onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, activity, 'resize-left'); }}
+            onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e, activity, 'resize-left'); }}
+          />
+          <div
+            className="absolute right-0 top-0 h-full w-4 cursor-ew-resize z-30 touch-none"
+            onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, activity, 'resize-right'); }}
+            onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e, activity, 'resize-right'); }}
+          />
         </>
       )}
 
@@ -392,6 +405,23 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
     });
   };
 
+  const handleTouchStart = (e: React.TouchEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => {
+    if (readOnly) return;
+    const touch = e.touches[0];
+    setDragState({
+      activity,
+      mode,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialStart: activity.startDate,
+      initialEnd: activity.endDate,
+      initialSwimlaneId: activity.swimlaneId,
+      deltaX: 0,
+      deltaY: 0,
+      ghostActivity: { ...activity },
+    });
+  };
+
   const startSwimlaneResize = (e: React.MouseEvent, id: string, initialHeight: number) => {
     if (readOnly) return;
     e.preventDefault();
@@ -434,10 +464,10 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   };
 
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientX: number, clientY: number) => {
       if (dragState) {
-        const deltaX = e.clientX - dragState.startX;
-        const deltaY = e.clientY - dragState.startY;
+        const deltaX = clientX - dragState.startX;
+        const deltaY = clientY - dragState.startY;
 
         const deltaDays = Math.round(deltaX / dayWidth);
         const { activity, mode, initialStart, initialEnd } = dragState;
@@ -452,7 +482,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
 
           if (canvasRef.current) {
             const canvasRect = canvasRef.current.getBoundingClientRect();
-            const relativeY = e.clientY - canvasRect.top;
+            const relativeY = clientY - canvasRect.top;
 
             const targetSwimlane = swimlanes.find(s => {
               const bounds = swimlaneOffsets[s.id];
@@ -485,7 +515,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
       }
 
       if (resizingSwimlane) {
-        const deltaY = e.clientY - resizingSwimlane.startY;
+        const deltaY = clientY - resizingSwimlane.startY;
         const newHeight = Math.max(80, resizingSwimlane.initialHeight + deltaY);
         setSwimlaneHeights(prev => ({
           ...prev,
@@ -494,7 +524,19 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
       }
     };
 
-    const handleGlobalMouseUp = () => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (dragState || resizingSwimlane) {
+        e.preventDefault(); // Prevent scrolling while dragging
+        const touch = e.touches[0];
+        handleMove(touch.clientX, touch.clientY);
+      }
+    };
+
+    const handleEnd = () => {
       if (dragState && dragState.ghostActivity) {
         const { ghostActivity } = dragState;
         if (ghostActivity.startDate !== dragState.activity.startDate ||
@@ -509,11 +551,17 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
 
     if (dragState || resizingSwimlane) {
       window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+      window.addEventListener('touchend', handleEnd);
+      window.addEventListener('touchcancel', handleEnd);
     }
     return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+      window.removeEventListener('touchcancel', handleEnd);
     };
   }, [dragState, resizingSwimlane, dayWidth, onUpdate, swimlanes, swimlaneOffsets]);
 
@@ -751,6 +799,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                       top={(swimlaneLayouts[swimlane.id]?.findIndex(row => row.some(a => a.id === dragState.activity.id)) ?? 0) * rowHeight + 24}
                       density={density}
                       onMouseDown={() => {}}
+                      onTouchStart={() => {}}
                       onDoubleClick={() => {}}
                       onDuplicate={() => {}}
                       onDelete={() => {}}
@@ -772,6 +821,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                           top={rowIndex * rowHeight + 24}
                           density={density}
                           onMouseDown={handleMouseDown}
+                          onTouchStart={handleTouchStart}
                           onDoubleClick={onEdit}
                           onDuplicate={onDuplicate}
                           onDelete={onDeleteActivity}

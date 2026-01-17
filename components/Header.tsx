@@ -46,9 +46,9 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white dark:bg-valuenova-bg border-b border-gray-200 dark:border-valuenova-border px-6 h-16 flex items-center justify-between sticky top-0 z-30 transition-colors">
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-3">
+    <header className="bg-white dark:bg-valuenova-bg border-b border-gray-200 dark:border-valuenova-border px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between sticky top-0 z-30 transition-colors">
+      <div className="flex items-center gap-2 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 bg-indigo-600 dark:bg-valuenova-accent rounded-lg flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
@@ -57,15 +57,15 @@ const Header: React.FC<HeaderProps> = ({
           <h1 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight hidden md:block">CampaignOS</h1>
         </div>
 
-        <div className="h-8 w-px bg-gray-200 dark:bg-valuenova-border mx-2"></div>
+        <div className="h-8 w-px bg-gray-200 dark:bg-valuenova-border mx-1 sm:mx-2 hidden sm:block"></div>
 
         <button
           onClick={onCalendarSwitchClick}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-valuenova-surface transition-colors group"
+          className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-valuenova-surface transition-colors group min-h-[44px]"
         >
           <div className="flex flex-col items-start text-left">
-            <span className="text-[10px] font-black uppercase text-gray-400 dark:text-valuenova-muted leading-none mb-1">Workspace</span>
-            <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5 whitespace-nowrap overflow-hidden max-w-[150px]">
+            <span className="text-[10px] font-black uppercase text-gray-400 dark:text-valuenova-muted leading-none mb-1 hidden sm:block">Workspace</span>
+            <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5 whitespace-nowrap overflow-hidden max-w-[100px] sm:max-w-[150px]">
               {activeCalendarName}
               <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </span>
@@ -92,29 +92,30 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <nav className="flex bg-gray-100 dark:bg-valuenova-surface p-1 rounded-lg transition-colors">
+      <div className="flex items-center gap-2 sm:gap-6">
+        <nav className="flex bg-gray-100 dark:bg-valuenova-surface p-0.5 sm:p-1 rounded-lg transition-colors">
           {(['timeline', 'calendar', 'table'] as ViewType[]).map((v) => (
             <Tooltip key={v} content={`${v.charAt(0).toUpperCase() + v.slice(1)} view`} shortcut={viewShortcuts[v]} position="bottom">
               <button
                 onClick={() => onViewChange(v)}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${
+                className={`px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all duration-200 min-h-[36px] sm:min-h-[auto] ${
                   currentView === v
                   ? 'bg-white dark:bg-valuenova-border text-indigo-600 dark:text-valuenova-accent shadow-sm'
                   : 'text-gray-500 dark:text-valuenova-muted hover:text-gray-700 dark:hover:text-white'
                 }`}
               >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
+                <span className="hidden sm:inline">{v.charAt(0).toUpperCase() + v.slice(1)}</span>
+                <span className="sm:hidden">{v.charAt(0).toUpperCase()}</span>
               </button>
             </Tooltip>
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
           <Tooltip content={isDarkMode ? "Light mode" : "Dark mode"} shortcut="D" position="bottom">
             <button
               onClick={toggleDarkMode}
-              className="p-2 text-gray-400 dark:text-valuenova-muted hover:text-indigo-600 dark:hover:text-valuenova-accent hover:bg-indigo-50 dark:hover:bg-valuenova-surface rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 dark:text-valuenova-muted hover:text-indigo-600 dark:hover:text-valuenova-accent hover:bg-indigo-50 dark:hover:bg-valuenova-surface rounded-lg transition-colors"
             >
               {isDarkMode ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -131,19 +132,19 @@ const Header: React.FC<HeaderProps> = ({
           <Tooltip content="Export data" shortcut="E" position="bottom">
             <button
               onClick={onExportClick}
-              className="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 dark:border-valuenova-border text-gray-600 dark:text-valuenova-text hover:bg-gray-50 dark:hover:bg-valuenova-surface transition-all active:scale-95 flex items-center gap-2"
+              className="hidden sm:flex px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 dark:border-valuenova-border text-gray-600 dark:text-valuenova-text hover:bg-gray-50 dark:hover:bg-valuenova-surface transition-all active:scale-95 items-center gap-2 min-h-[44px]"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              <span>Export</span>
+              <span className="hidden md:inline">Export</span>
             </button>
           </Tooltip>
 
           <Tooltip content="Create new activity" shortcut="N" position="bottom">
             <button
               onClick={onAddActivityClick}
-              className="bg-indigo-600 dark:bg-valuenova-accent text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 dark:hover:brightness-110 shadow-lg dark:shadow-none transition-all active:scale-95 flex items-center gap-2"
+              className="bg-indigo-600 dark:bg-valuenova-accent text-white px-3 sm:px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 dark:hover:brightness-110 shadow-lg dark:shadow-none transition-all active:scale-95 flex items-center gap-2 min-h-[44px]"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -152,7 +153,7 @@ const Header: React.FC<HeaderProps> = ({
             </button>
           </Tooltip>
 
-          <div className="h-8 w-px bg-gray-200 dark:bg-valuenova-border mx-1"></div>
+          <div className="h-8 w-px bg-gray-200 dark:bg-valuenova-border mx-1 hidden sm:block"></div>
 
           <div className="flex items-center gap-3 pl-2 group relative">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 border-2 border-white dark:border-valuenova-border shadow-sm flex items-center justify-center text-white font-bold text-xs cursor-pointer">

@@ -188,26 +188,26 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 dark:bg-valuenova-bg/80 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-all">
-      <div className="bg-white dark:bg-valuenova-surface rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 transition-colors border border-gray-200 dark:border-valuenova-border">
-        <div className="px-8 py-6 border-b border-gray-100 dark:border-valuenova-border flex justify-between items-center bg-white dark:bg-valuenova-surface">
-          <div className="flex items-center gap-4">
+    <div className="fixed inset-0 bg-gray-900/60 dark:bg-valuenova-bg/80 backdrop-blur-sm flex justify-center items-end sm:items-center z-50 p-0 sm:p-4 transition-all">
+      <div className="bg-white dark:bg-valuenova-surface rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom sm:zoom-in duration-200 transition-colors border border-gray-200 dark:border-valuenova-border">
+        <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-100 dark:border-valuenova-border flex justify-between items-center bg-white dark:bg-valuenova-surface">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{activity?.id ? 'Edit Activity' : 'Create New Activity'}</h2>
-              <p className="text-sm text-gray-500 dark:text-valuenova-muted font-medium">Configure initiative parameters and link assets.</p>
+              <h2 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{activity?.id ? 'Edit Activity' : 'Create Activity'}</h2>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-valuenova-muted font-medium hidden sm:block">Configure initiative parameters and link assets.</p>
             </div>
             {readOnly && (
-              <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-yellow-200 dark:border-yellow-800/20">
+              <span className="px-2 sm:px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-full border border-yellow-200 dark:border-yellow-800/20">
                 View Only
               </span>
             )}
           </div>
-          <button onClick={onClose} className="text-gray-400 dark:text-valuenova-muted hover:text-gray-600 dark:hover:text-white p-2 hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-full transition-colors">
+          <button onClick={onClose} className="text-gray-400 dark:text-valuenova-muted hover:text-gray-600 dark:hover:text-white p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-valuenova-bg rounded-full transition-colors">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto px-10 py-8 space-y-10 scrollbar-hide bg-[#FBFBFC] dark:bg-valuenova-bg">
+        <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto px-4 sm:px-10 py-6 sm:py-8 space-y-8 sm:space-y-10 scrollbar-hide bg-[#FBFBFC] dark:bg-valuenova-bg">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-10">
               <section className="transition-all duration-300">
