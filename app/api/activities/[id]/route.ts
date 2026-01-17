@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, activities } from '@/db';
+import { db, activities, calendars } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
+
+// Helper to check if user can access calendar
+async function canAccessCalendar(userId: string, userRole: string, calendarId: string): Promise<boolean> {
+  // Managers and admins can access all calendars
+  if (userRole === 'MANAGER' || userRole === 'ADMIN') return true;
+
+  // Check if user owns the calendar
+  const [calendar] = await db.select().from(calendars).where(eq(calendars.id, calendarId)).limit(1);
+  return calendar?.ownerId === userId;
+}
 
 // GET /api/activities/[id] - Get a specific activity
 export async function GET(
@@ -20,6 +30,12 @@ export async function GET(
 
     if (!activity) {
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
+    }
+
+    // Check authorization
+    const hasAccess = await canAccessCalendar(user.id, user.role, activity.calendarId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json({ activity });
@@ -41,6 +57,18 @@ export async function PUT(
     }
 
     const { id } = await params;
+
+    // Get activity to check authorization
+    const [existingActivity] = await db.select().from(activities).where(eq(activities.id, id)).limit(1);
+    if (!existingActivity) {
+      return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
+    }
+
+    const hasAccess = await canAccessCalendar(user.id, user.role, existingActivity.calendarId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
@@ -101,14 +129,18 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const [deletedActivity] = await db
-      .delete(activities)
-      .where(eq(activities.id, id))
-      .returning();
-
-    if (!deletedActivity) {
+    // Get activity to check authorization
+    const [existingActivity] = await db.select().from(activities).where(eq(activities.id, id)).limit(1);
+    if (!existingActivity) {
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
+
+    const hasAccess = await canAccessCalendar(user.id, user.role, existingActivity.calendarId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    await db.delete(activities).where(eq(activities.id, id));
 
     return NextResponse.json({ message: 'Activity deleted successfully' });
   } catch (error) {

@@ -39,14 +39,22 @@ const MOCK_DRIVE_FILES: Omit<Attachment, 'id'>[] = [
   { name: 'Hero_Banner_v1.png', type: 'image', url: '#' },
 ];
 
-const ActivityModal: React.FC<ActivityModalProps> = ({ 
+const ActivityModal: React.FC<ActivityModalProps> = ({
   activity, campaigns, swimlanes, activityTypes, vendors, onClose, onSave, onDelete,
+  onAddCampaign, onAddActivityType, allActivities = [],
   readOnly = false
 }) => {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    general: false, schedule: false, commercials: false, visual: false, attachments: false
+    general: false, schedule: false, commercials: false, visual: false, attachments: false, dependencies: true
   });
   const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
+  const [isAddingCampaign, setIsAddingCampaign] = useState(false);
+  const [isAddingActivityType, setIsAddingActivityType] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [newActivityTypeName, setNewActivityTypeName] = useState('');
+
+  // Get available activities for dependencies (exclude current activity)
+  const availableForDependency = allActivities.filter(a => a.id !== activity?.id);
 
   const toggleSection = (section: string) => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -208,15 +216,127 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                     </div>
                     <div>
                       <label className={labelClass}>Parent Campaign</label>
-                      <select name="campaignId" value={formData.campaignId} onChange={handleChange} disabled={readOnly} className={inputClass}>
-                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                      {isAddingCampaign ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newCampaignName}
+                            onChange={(e) => setNewCampaignName(e.target.value)}
+                            placeholder="Campaign name..."
+                            className={inputClass}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && newCampaignName.trim()) {
+                                onAddCampaign(newCampaignName.trim());
+                                setNewCampaignName('');
+                                setIsAddingCampaign(false);
+                              } else if (e.key === 'Escape') {
+                                setNewCampaignName('');
+                                setIsAddingCampaign(false);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newCampaignName.trim()) {
+                                onAddCampaign(newCampaignName.trim());
+                                setNewCampaignName('');
+                                setIsAddingCampaign(false);
+                              }
+                            }}
+                            className="px-3 py-2 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-lg text-xs font-bold hover:bg-indigo-700"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setNewCampaignName(''); setIsAddingCampaign(false); }}
+                            className="px-3 py-2 text-gray-500 hover:text-gray-700 text-xs font-bold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <select name="campaignId" value={formData.campaignId} onChange={handleChange} disabled={readOnly} className={`${inputClass} flex-grow`}>
+                            <option value="">-- No Campaign --</option>
+                            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => setIsAddingCampaign(true)}
+                              className="px-3 py-2 border border-gray-200 dark:border-valuenova-border rounded-lg text-xs font-bold text-gray-500 dark:text-valuenova-muted hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                              New
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Activity Type</label>
-                      <select name="typeId" value={formData.typeId} onChange={handleChange} disabled={readOnly} className={inputClass}>
-                        {activityTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
+                      {isAddingActivityType ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newActivityTypeName}
+                            onChange={(e) => setNewActivityTypeName(e.target.value)}
+                            placeholder="Activity type name..."
+                            className={inputClass}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && newActivityTypeName.trim()) {
+                                onAddActivityType(newActivityTypeName.trim());
+                                setNewActivityTypeName('');
+                                setIsAddingActivityType(false);
+                              } else if (e.key === 'Escape') {
+                                setNewActivityTypeName('');
+                                setIsAddingActivityType(false);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newActivityTypeName.trim()) {
+                                onAddActivityType(newActivityTypeName.trim());
+                                setNewActivityTypeName('');
+                                setIsAddingActivityType(false);
+                              }
+                            }}
+                            className="px-3 py-2 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-lg text-xs font-bold hover:bg-indigo-700"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setNewActivityTypeName(''); setIsAddingActivityType(false); }}
+                            className="px-3 py-2 text-gray-500 hover:text-gray-700 text-xs font-bold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <select name="typeId" value={formData.typeId} onChange={handleChange} disabled={readOnly} className={`${inputClass} flex-grow`}>
+                            <option value="">-- No Type --</option>
+                            {activityTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => setIsAddingActivityType(true)}
+                              className="px-3 py-2 border border-gray-200 dark:border-valuenova-border rounded-lg text-xs font-bold text-gray-500 dark:text-valuenova-muted hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                              New
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -264,9 +384,13 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                         {Object.values(CampaignStatus).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1">
                       <label className={labelClass}>Expected SAOs</label>
                       <input type="number" name="expectedSAOs" value={formData.expectedSAOs} onChange={handleChange} disabled={readOnly} className={numericInputClass} />
+                    </div>
+                    <div className="col-span-1">
+                      <label className={labelClass}>Actual SAOs</label>
+                      <input type="number" name="actualSAOs" value={formData.actualSAOs} onChange={handleChange} disabled={readOnly} className={numericInputClass} />
                     </div>
                     <div className="col-span-2">
                       <label className={labelClass}>Target Region</label>
@@ -316,6 +440,70 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                           ))}
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="transition-all duration-300">
+                <SectionHeader title="Dependencies" sectionKey="dependencies" />
+                {!collapsedSections.dependencies && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                    <p className="text-xs text-gray-500 dark:text-valuenova-muted">
+                      Select activities that must be completed before this one can start.
+                    </p>
+                    {/* Current dependencies */}
+                    {(formData.dependencies || []).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(formData.dependencies || []).map(depId => {
+                          const depActivity = allActivities.find(a => a.id === depId);
+                          if (!depActivity) return null;
+                          return (
+                            <div key={depId} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-lg">
+                              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{depActivity.title}</span>
+                              {!readOnly && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({
+                                    ...prev,
+                                    dependencies: (prev.dependencies || []).filter(id => id !== depId)
+                                  }))}
+                                  className="text-indigo-400 hover:text-red-500"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {/* Add dependency dropdown */}
+                    {!readOnly && availableForDependency.length > 0 && (
+                      <div>
+                        <select
+                          className={inputClass}
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value && !(formData.dependencies || []).includes(e.target.value)) {
+                              setFormData(prev => ({
+                                ...prev,
+                                dependencies: [...(prev.dependencies || []), e.target.value]
+                              }));
+                            }
+                          }}
+                        >
+                          <option value="">+ Add dependency...</option>
+                          {availableForDependency
+                            .filter(a => !(formData.dependencies || []).includes(a.id))
+                            .map(a => (
+                              <option key={a.id} value={a.id}>{a.title}</option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                    {availableForDependency.length === 0 && (
+                      <p className="text-xs text-gray-400 italic">No other activities available for dependencies.</p>
                     )}
                   </div>
                 )}

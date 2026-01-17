@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, Campaign, Swimlane, ActivityType, Vendor, CampaignStatus, Currency, Region, User, Calendar, UserRole } from '@/types';
 import Header from '@/components/Header';
@@ -11,6 +11,10 @@ import ActivityModal from '@/components/CampaignModal';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 import FilterControls from '@/components/FilterControls';
 import ManagerDashboard from '@/components/ManagerDashboard';
+import ExportModal, { ExportConfig } from '@/components/ExportModal';
+import CalendarSettingsModal from '@/components/CalendarSettingsModal';
+import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
+import { CalendarPermission } from '@/types';
 
 export type ViewType = 'timeline' | 'calendar' | 'table';
 
@@ -49,7 +53,14 @@ export default function AppShell({
   const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [activeCalendarId, setActiveCalendarId] = useState<string>(initialActiveCalendarId);
   const [view, setView] = useState<ViewType>('timeline');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // Check localStorage for saved preference, default to true (dark mode)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('darkMode');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Data state
@@ -64,16 +75,112 @@ export default function AppShell({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | Partial<Activity> | null>(null);
+  const [permissions, setPermissions] = useState<CalendarPermission[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [filters, setFilters] = useState<Filters>({
     search: '', campaignId: 'all', status: 'all', dateRange: 'all', startDate: '', endDate: '',
   });
 
-  // Dark mode effect
+  // Dark mode effect - also persists preference to localStorage
   useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', String(isDarkMode));
   }, [isDarkMode]);
+
+  // Load permissions when calendar changes
+  useEffect(() => {
+    async function loadPermissions() {
+      try {
+        const res = await fetch(`/api/calendar-permissions?calendarId=${activeCalendarId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPermissions(data.permissions.map((p: Record<string, unknown>) => ({
+            calendarId: p.calendarId as string,
+            userId: p.userId as string,
+            accessType: p.accessType as 'view' | 'edit' | 'copy',
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to load permissions:', error);
+      }
+    }
+    if (activeCalendarId) loadPermissions();
+  }, [activeCalendarId]);
+
+  // Load all users for admin dashboard (managers/admins only)
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const data = await res.json();
+          setAllUsers(data.users);
+        }
+      } catch (error) {
+        console.error('Failed to load users:', error);
+      }
+    }
+    if (currentUser?.role === UserRole.MANAGER || currentUser?.role === UserRole.ADMIN) {
+      loadUsers();
+    }
+  }, [currentUser?.role]);
+
+  // Keyboard shortcuts
+  const handleKeyPress = useCallback((e: KeyboardEvent) => {
+    // Don't trigger shortcuts when typing in inputs
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+      return;
+    }
+
+    // Don't trigger if any modal is open (except for Escape)
+    const anyModalOpen = isModalOpen || isWorkspaceOpen || isAdminOpen || isExportOpen || isSettingsOpen || isHelpOpen;
+
+    switch (e.key.toLowerCase()) {
+      case '1':
+        if (!anyModalOpen) setView('timeline');
+        break;
+      case '2':
+        if (!anyModalOpen) setView('calendar');
+        break;
+      case '3':
+        if (!anyModalOpen) setView('table');
+        break;
+      case 'n':
+        if (!anyModalOpen) { setEditingActivity(null); setIsModalOpen(true); }
+        break;
+      case 'e':
+        if (!anyModalOpen) setIsExportOpen(true);
+        break;
+      case 'd':
+        if (!anyModalOpen) setIsDarkMode(prev => !prev);
+        break;
+      case '?':
+        if (!anyModalOpen) setIsHelpOpen(true);
+        break;
+      case 'escape':
+        // Close any open modal
+        if (isHelpOpen) setIsHelpOpen(false);
+        else if (isExportOpen) setIsExportOpen(false);
+        else if (isSettingsOpen) setIsSettingsOpen(false);
+        else if (isAdminOpen) setIsAdminOpen(false);
+        else if (isWorkspaceOpen) setIsWorkspaceOpen(false);
+        else if (isModalOpen) setIsModalOpen(false);
+        break;
+    }
+  }, [isModalOpen, isWorkspaceOpen, isAdminOpen, isExportOpen, isSettingsOpen, isHelpOpen]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [handleKeyPress]);
 
   // Load calendar data when active calendar changes
   useEffect(() => {
@@ -308,6 +415,133 @@ export default function AppShell({
     router.refresh();
   };
 
+  // Export handler
+  const handleExport = async (config: ExportConfig) => {
+    setIsExportOpen(false);
+    setIsSyncing(true);
+
+    try {
+      // For CSV export, generate and download immediately
+      if (config.format === 'csv') {
+        const headers = ['Title', 'Start Date', 'End Date', 'Status', 'Swimlane', 'Campaign', 'Cost', 'Currency'];
+        const rows = filteredActivities.map(a => [
+          a.title,
+          a.startDate,
+          a.endDate,
+          a.status,
+          swimlanes.find(s => s.id === a.swimlaneId)?.name || '',
+          campaigns.find(c => c.id === a.campaignId)?.name || '',
+          a.cost.toString(),
+          a.currency
+        ]);
+        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // For image-based exports, use html2canvas on the timeline
+        const { default: html2canvas } = await import('html2canvas');
+        const timeline = document.querySelector('.timeline-container') as HTMLElement;
+        if (timeline) {
+          const canvas = await html2canvas(timeline, {
+            scale: 2,
+            backgroundColor: isDarkMode ? '#0B0E14' : '#ffffff'
+          });
+          const link = document.createElement('a');
+          link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.${config.format === 'pdf' ? 'png' : config.format}`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        }
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Calendar update handler
+  const handleUpdateCalendar = async (calendar: Calendar) => {
+    try {
+      const res = await fetch(`/api/calendars/${calendar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: calendar.name }),
+      });
+      if (res.ok) {
+        setCalendars(prev => prev.map(c => c.id === calendar.id ? calendar : c));
+      }
+    } catch (error) {
+      console.error('Failed to update calendar:', error);
+    }
+  };
+
+  // User update handler (for admin dashboard)
+  const handleUpdateUser = async (userId: string, updates: { role?: string; name?: string }) => {
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, ...updates }),
+      });
+      if (res.ok) {
+        const { user: updatedUser } = await res.json();
+        setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedUser } : u));
+      }
+    } catch (error) {
+      console.error('Failed to update user:', error);
+    }
+  };
+
+  // Wrapper for ManagerDashboard user updates (detects changes and calls API)
+  const handleUsersUpdateFromDashboard = (newUsers: User[]) => {
+    // Find which user changed and update via API
+    for (const newUser of newUsers) {
+      const oldUser = allUsers.find(u => u.id === newUser.id);
+      if (oldUser && oldUser.role !== newUser.role) {
+        handleUpdateUser(newUser.id, { role: newUser.role });
+        break;
+      }
+      if (oldUser && oldUser.name !== newUser.name) {
+        handleUpdateUser(newUser.id, { name: newUser.name });
+        break;
+      }
+    }
+    // Update local state immediately for responsive UI
+    setAllUsers(newUsers);
+  };
+
+  // Permission handlers for CalendarSettingsModal
+  const handleAddPermission = async (email: string, accessType: 'view' | 'edit' | 'copy' = 'view') => {
+    try {
+      const res = await fetch('/api/calendar-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendarId: activeCalendarId, email, accessType }),
+      });
+      if (res.ok) {
+        const { permission } = await res.json();
+        setPermissions(prev => [...prev, {
+          calendarId: permission.calendarId,
+          userId: permission.userId,
+          accessType: permission.accessType,
+        }]);
+        return { success: true };
+      } else {
+        const error = await res.json();
+        return { success: false, error: error.error };
+      }
+    } catch (error) {
+      console.error('Failed to add permission:', error);
+      return { success: false, error: 'Network error' };
+    }
+  };
+
   // Filter logic
   const filteredActivities = useMemo(() => {
     return activities.filter(a => {
@@ -334,12 +568,12 @@ export default function AppShell({
         onAddActivityClick={() => { setEditingActivity(null); setIsModalOpen(true); }}
         currentView={view}
         onViewChange={setView}
-        onExportClick={() => alert('Export coming soon!')}
+        onExportClick={() => setIsExportOpen(true)}
         isDarkMode={isDarkMode}
         toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         activeCalendarName={activeCalendarName}
         onCalendarSwitchClick={() => setIsWorkspaceOpen(true)}
-        onSettingsClick={() => {}}
+        onSettingsClick={() => setIsSettingsOpen(true)}
         onAdminClick={() => isManager && setIsAdminOpen(true)}
         user={currentUser}
         onLogout={handleLogout}
@@ -495,15 +729,34 @@ export default function AppShell({
           onAddCalendar={handleAddCalendar}
           onDeleteCalendar={handleDeleteCalendar}
           user={currentUser}
-          permissions={[]}
+          permissions={permissions}
+        />
+      )}
+
+      {isExportOpen && (
+        <ExportModal
+          onClose={() => setIsExportOpen(false)}
+          onStartExport={handleExport}
+        />
+      )}
+
+      {isSettingsOpen && calendars.find(c => c.id === activeCalendarId) && (
+        <CalendarSettingsModal
+          calendar={calendars.find(c => c.id === activeCalendarId)!}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={handleUpdateCalendar}
+          onDelete={(id) => { handleDeleteCalendar(id); setIsSettingsOpen(false); }}
+          permissions={permissions}
+          onUpdatePermissions={setPermissions}
+          currentUser={currentUser}
         />
       )}
 
       {isAdminOpen && isManager && (
         <ManagerDashboard
           onClose={() => setIsAdminOpen(false)}
-          users={[currentUser]}
-          onUpdateUsers={() => {}}
+          users={allUsers.length > 0 ? allUsers : [currentUser]}
+          onUpdateUsers={handleUsersUpdateFromDashboard}
           calendars={calendars}
           onUpdateCalendars={setCalendars}
           activities={activities}
@@ -513,6 +766,8 @@ export default function AppShell({
           }}
         />
       )}
+
+      <KeyboardShortcutsHelp isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
     </div>
   );
 }

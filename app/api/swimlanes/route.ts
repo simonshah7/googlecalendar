@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, swimlanes } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,9 +11,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const calendarId = searchParams.get('calendarId');
 
+    // Sort by sortOrder to maintain user-defined ordering
     const swimlaneList = calendarId
-      ? await db.select().from(swimlanes).where(eq(swimlanes.calendarId, calendarId))
-      : await db.select().from(swimlanes);
+      ? await db.select().from(swimlanes).where(eq(swimlanes.calendarId, calendarId)).orderBy(asc(swimlanes.sortOrder))
+      : await db.select().from(swimlanes).orderBy(asc(swimlanes.sortOrder));
 
     return NextResponse.json({ swimlanes: swimlaneList });
   } catch (error) {

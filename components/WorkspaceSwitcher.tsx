@@ -22,6 +22,8 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   const visibleCalendars = calendars.filter(cal => {
     if (!user) return false;
     if (user.role === UserRole.MANAGER || user.role === UserRole.ADMIN) return true;
+    // Show calendars the user owns OR has explicit permission for
+    if (cal.ownerId === user.id) return true;
     return permissions.some(p => p.calendarId === cal.id && p.userId === user.id);
   });
 
