@@ -11,6 +11,9 @@ import ActivityModal from '@/components/CampaignModal';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 import FilterControls from '@/components/FilterControls';
 import ManagerDashboard from '@/components/ManagerDashboard';
+import ExportModal, { ExportConfig } from '@/components/ExportModal';
+import CalendarSettingsModal from '@/components/CalendarSettingsModal';
+import { CalendarPermission } from '@/types';
 
 export type ViewType = 'timeline' | 'calendar' | 'table';
 
@@ -71,7 +74,10 @@ export default function AppShell({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | Partial<Activity> | null>(null);
+  const [permissions, setPermissions] = useState<CalendarPermission[]>([]);
   const [filters, setFilters] = useState<Filters>({
     search: '', campaignId: 'all', status: 'all', dateRange: 'all', startDate: '', endDate: '',
   });
@@ -319,6 +325,72 @@ export default function AppShell({
     router.refresh();
   };
 
+  // Export handler
+  const handleExport = async (config: ExportConfig) => {
+    setIsExportOpen(false);
+    setIsSyncing(true);
+
+    try {
+      // For CSV export, generate and download immediately
+      if (config.format === 'csv') {
+        const headers = ['Title', 'Start Date', 'End Date', 'Status', 'Swimlane', 'Campaign', 'Cost', 'Currency'];
+        const rows = filteredActivities.map(a => [
+          a.title,
+          a.startDate,
+          a.endDate,
+          a.status,
+          swimlanes.find(s => s.id === a.swimlaneId)?.name || '',
+          campaigns.find(c => c.id === a.campaignId)?.name || '',
+          a.cost.toString(),
+          a.currency
+        ]);
+        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // For image-based exports, use html2canvas on the timeline
+        const { default: html2canvas } = await import('html2canvas');
+        const timeline = document.querySelector('.timeline-container') as HTMLElement;
+        if (timeline) {
+          const canvas = await html2canvas(timeline, {
+            scale: 2,
+            backgroundColor: isDarkMode ? '#0B0E14' : '#ffffff'
+          });
+          const link = document.createElement('a');
+          link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.${config.format === 'pdf' ? 'png' : config.format}`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        }
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Calendar update handler
+  const handleUpdateCalendar = async (calendar: Calendar) => {
+    try {
+      const res = await fetch(`/api/calendars/${calendar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: calendar.name }),
+      });
+      if (res.ok) {
+        setCalendars(prev => prev.map(c => c.id === calendar.id ? calendar : c));
+      }
+    } catch (error) {
+      console.error('Failed to update calendar:', error);
+    }
+  };
+
   // Filter logic
   const filteredActivities = useMemo(() => {
     return activities.filter(a => {
@@ -345,12 +417,12 @@ export default function AppShell({
         onAddActivityClick={() => { setEditingActivity(null); setIsModalOpen(true); }}
         currentView={view}
         onViewChange={setView}
-        onExportClick={() => alert('Export coming soon!')}
+        onExportClick={() => setIsExportOpen(true)}
         isDarkMode={isDarkMode}
         toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         activeCalendarName={activeCalendarName}
         onCalendarSwitchClick={() => setIsWorkspaceOpen(true)}
-        onSettingsClick={() => {}}
+        onSettingsClick={() => setIsSettingsOpen(true)}
         onAdminClick={() => isManager && setIsAdminOpen(true)}
         user={currentUser}
         onLogout={handleLogout}
@@ -506,7 +578,26 @@ export default function AppShell({
           onAddCalendar={handleAddCalendar}
           onDeleteCalendar={handleDeleteCalendar}
           user={currentUser}
-          permissions={[]}
+          permissions={permissions}
+        />
+      )}
+
+      {isExportOpen && (
+        <ExportModal
+          onClose={() => setIsExportOpen(false)}
+          onStartExport={handleExport}
+        />
+      )}
+
+      {isSettingsOpen && calendars.find(c => c.id === activeCalendarId) && (
+        <CalendarSettingsModal
+          calendar={calendars.find(c => c.id === activeCalendarId)!}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={handleUpdateCalendar}
+          onDelete={(id) => { handleDeleteCalendar(id); setIsSettingsOpen(false); }}
+          permissions={permissions}
+          onUpdatePermissions={setPermissions}
+          currentUser={currentUser}
         />
       )}
 

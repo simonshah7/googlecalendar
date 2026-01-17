@@ -41,17 +41,20 @@ const MOCK_DRIVE_FILES: Omit<Attachment, 'id'>[] = [
 
 const ActivityModal: React.FC<ActivityModalProps> = ({
   activity, campaigns, swimlanes, activityTypes, vendors, onClose, onSave, onDelete,
-  onAddCampaign, onAddActivityType,
+  onAddCampaign, onAddActivityType, allActivities = [],
   readOnly = false
 }) => {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    general: false, schedule: false, commercials: false, visual: false, attachments: false
+    general: false, schedule: false, commercials: false, visual: false, attachments: false, dependencies: true
   });
   const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
   const [isAddingCampaign, setIsAddingCampaign] = useState(false);
   const [isAddingActivityType, setIsAddingActivityType] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newActivityTypeName, setNewActivityTypeName] = useState('');
+
+  // Get available activities for dependencies (exclude current activity)
+  const availableForDependency = allActivities.filter(a => a.id !== activity?.id);
 
   const toggleSection = (section: string) => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -381,9 +384,13 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                         {Object.values(CampaignStatus).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1">
                       <label className={labelClass}>Expected SAOs</label>
                       <input type="number" name="expectedSAOs" value={formData.expectedSAOs} onChange={handleChange} disabled={readOnly} className={numericInputClass} />
+                    </div>
+                    <div className="col-span-1">
+                      <label className={labelClass}>Actual SAOs</label>
+                      <input type="number" name="actualSAOs" value={formData.actualSAOs} onChange={handleChange} disabled={readOnly} className={numericInputClass} />
                     </div>
                     <div className="col-span-2">
                       <label className={labelClass}>Target Region</label>
@@ -433,6 +440,70 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                           ))}
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="transition-all duration-300">
+                <SectionHeader title="Dependencies" sectionKey="dependencies" />
+                {!collapsedSections.dependencies && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                    <p className="text-xs text-gray-500 dark:text-valuenova-muted">
+                      Select activities that must be completed before this one can start.
+                    </p>
+                    {/* Current dependencies */}
+                    {(formData.dependencies || []).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(formData.dependencies || []).map(depId => {
+                          const depActivity = allActivities.find(a => a.id === depId);
+                          if (!depActivity) return null;
+                          return (
+                            <div key={depId} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-lg">
+                              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{depActivity.title}</span>
+                              {!readOnly && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({
+                                    ...prev,
+                                    dependencies: (prev.dependencies || []).filter(id => id !== depId)
+                                  }))}
+                                  className="text-indigo-400 hover:text-red-500"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {/* Add dependency dropdown */}
+                    {!readOnly && availableForDependency.length > 0 && (
+                      <div>
+                        <select
+                          className={inputClass}
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value && !(formData.dependencies || []).includes(e.target.value)) {
+                              setFormData(prev => ({
+                                ...prev,
+                                dependencies: [...(prev.dependencies || []), e.target.value]
+                              }));
+                            }
+                          }}
+                        >
+                          <option value="">+ Add dependency...</option>
+                          {availableForDependency
+                            .filter(a => !(formData.dependencies || []).includes(a.id))
+                            .map(a => (
+                              <option key={a.id} value={a.id}>{a.title}</option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                    {availableForDependency.length === 0 && (
+                      <p className="text-xs text-gray-400 italic">No other activities available for dependencies.</p>
                     )}
                   </div>
                 )}
