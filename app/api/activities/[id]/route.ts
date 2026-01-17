@@ -52,9 +52,17 @@ export async function PUT(
       'currency', 'vendorId', 'region', 'dependencies', 'attachments', 'color'
     ];
 
+    // Optional UUID foreign keys - convert empty strings to null
+    const optionalUuidFields = ['typeId', 'campaignId', 'vendorId'];
+
     allowedFields.forEach(field => {
       if (body[field] !== undefined) {
-        updateData[field] = body[field];
+        // Convert empty strings to null for optional UUID fields
+        if (optionalUuidFields.includes(field) && body[field] === '') {
+          updateData[field] = null;
+        } else {
+          updateData[field] = body[field];
+        }
       }
     });
 

@@ -137,7 +137,8 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (readOnly) return;
-    if (formData.title && formData.startDate && formData.endDate && formData.campaignId && formData.typeId) {
+    // Only require title, startDate, endDate, and swimlaneId - campaignId and typeId are optional
+    if (formData.title && formData.startDate && formData.endDate && formData.swimlaneId) {
        onSave({ ...formData, id: activity?.id || '' } as Activity);
     }
   };

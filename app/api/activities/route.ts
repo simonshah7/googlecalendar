@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       title,
-      typeId,
-      campaignId,
+      typeId: rawTypeId,
+      campaignId: rawCampaignId,
       swimlaneId,
       calendarId,
       startDate,
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       tags = '',
       cost = 0,
       currency = 'US$',
-      vendorId,
+      vendorId: rawVendorId,
       expectedSAOs = 0,
       actualSAOs = 0,
       region = 'US',
@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
       attachments = [],
       color,
     } = body;
+
+    // Convert empty strings to null for optional UUID foreign keys
+    const typeId = rawTypeId || null;
+    const campaignId = rawCampaignId || null;
+    const vendorId = rawVendorId || null;
 
     if (!title || !swimlaneId || !calendarId || !startDate || !endDate) {
       return NextResponse.json(
