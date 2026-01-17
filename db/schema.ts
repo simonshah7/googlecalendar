@@ -244,6 +244,10 @@ export const activities = pgTable('activities', {
   recurrenceCount: numeric('recurrence_count'), // Optional: number of occurrences
   parentActivityId: uuid('parent_activity_id'), // For recurring instances, reference to the parent
   isRecurrenceParent: boolean('is_recurrence_parent').default(false).notNull(), // True if this is the parent recurring activity
+  // New fields for enhanced activity modal
+  slackChannel: text('slack_channel'), // Slack channel reference (stored without leading #)
+  outline: text('outline'), // Activity outline/notes (multi-line plain text)
+  inlineComments: jsonb('inline_comments').$type<{ id: string; content: string; authorName: string; authorId: string; createdAt: string }[]>().default([]),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

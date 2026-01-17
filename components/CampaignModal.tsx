@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { Activity, Campaign, ActivityType, CampaignStatus, Swimlane, Vendor, Currency, Region, Attachment, RecurrenceFrequency } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Activity, Campaign, ActivityType, CampaignStatus, Swimlane, Vendor, Currency, Region, Attachment, RecurrenceFrequency, ActivityInlineComment, User } from '../types';
 import DatePicker from './DatePicker';
+import { generateICS, downloadICS, hasValidSchedule } from '../lib/ics';
 
 interface ActivityModalProps {
   activity: Activity | Partial<Activity> | null;
@@ -24,8 +25,9 @@ interface ActivityModalProps {
   isCampaignInUse: (id: string) => boolean;
   isActivityTypeInUse: (id: string) => boolean;
   isVendorInUse: (id: string) => boolean;
-  allActivities?: Activity[]; 
+  allActivities?: Activity[];
   readOnly?: boolean;
+  currentUser?: User;
 }
 
 const PRESET_COLORS = [
@@ -42,16 +44,19 @@ const MOCK_DRIVE_FILES: Omit<Attachment, 'id'>[] = [
 const ActivityModal: React.FC<ActivityModalProps> = ({
   activity, campaigns, swimlanes, activityTypes, vendors, onClose, onSave, onDelete,
   onAddCampaign, onAddActivityType, allActivities = [],
-  readOnly = false
+  readOnly = false,
+  currentUser
 }) => {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    general: false, schedule: false, commercials: false, visual: false, attachments: false, dependencies: true
+    general: false, schedule: false, commercials: false, visual: false, attachments: false, dependencies: true, outline: true, comments: true
   });
   const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
   const [isAddingCampaign, setIsAddingCampaign] = useState(false);
   const [isAddingActivityType, setIsAddingActivityType] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newActivityTypeName, setNewActivityTypeName] = useState('');
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isOutlineExpanded, setIsOutlineExpanded] = useState(false);
 
   // Get available activities for dependencies (exclude current activity)
   const availableForDependency = allActivities.filter(a => a.id !== activity?.id);
@@ -84,6 +89,10 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
     recurrenceFrequency: RecurrenceFrequency.NONE,
     recurrenceEndDate: undefined,
     recurrenceCount: undefined,
+    // New fields
+    slackChannel: '',
+    outline: '',
+    inlineComments: [] as ActivityInlineComment[],
   });
 
   const [formData, setFormData] = useState<Omit<Activity, 'id'>>(() => getInitialFormData());
@@ -155,6 +164,76 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
       ...prev,
       attachments: (prev.attachments || []).filter(a => a.id !== id)
     }));
+  };
+
+  // Get campaign and type names for ICS generation
+  const campaignName = useMemo(() => {
+    const campaign = campaigns.find(c => c.id === formData.campaignId);
+    return campaign?.name;
+  }, [campaigns, formData.campaignId]);
+
+  const typeName = useMemo(() => {
+    const type = activityTypes.find(t => t.id === formData.typeId);
+    return type?.name;
+  }, [activityTypes, formData.typeId]);
+
+  const vendorName = useMemo(() => {
+    const vendor = vendors.find(v => v.id === formData.vendorId);
+    return vendor?.name;
+  }, [vendors, formData.vendorId]);
+
+  // Handle ICS download
+  const handleDownloadICS = () => {
+    const activityForICS = { ...formData, id: activity?.id || 'new' } as Activity;
+    const icsContent = generateICS(activityForICS, {
+      campaignName,
+      typeName,
+      vendorName
+    });
+
+    if (icsContent) {
+      const filename = formData.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'activity';
+      downloadICS(icsContent, filename);
+    }
+  };
+
+  // Check if ICS download is available
+  const canDownloadICS = hasValidSchedule({ ...formData, id: '' } as Activity);
+
+  // Handle adding a new comment
+  const handleAddComment = () => {
+    if (!newCommentText.trim() || readOnly) return;
+
+    const newComment: ActivityInlineComment = {
+      id: `comment-${Date.now()}`,
+      content: newCommentText.trim(),
+      authorName: currentUser?.name || 'Anonymous',
+      authorId: currentUser?.id || '',
+      createdAt: new Date().toISOString()
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      inlineComments: [newComment, ...(prev.inlineComments || [])]
+    }));
+    setNewCommentText('');
+  };
+
+  // Handle removing a comment
+  const handleRemoveComment = (commentId: string) => {
+    if (readOnly) return;
+    setFormData(prev => ({
+      ...prev,
+      inlineComments: (prev.inlineComments || []).filter(c => c.id !== commentId)
+    }));
+  };
+
+  // Copy slack channel to clipboard
+  const handleCopySlackChannel = () => {
+    const channel = formData.slackChannel ? `#${formData.slackChannel.replace(/^#/, '')}` : '';
+    if (channel) {
+      navigator.clipboard.writeText(channel);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -600,6 +679,169 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                   </div>
                 )}
               </section>
+
+              {/* Slack Channel Section */}
+              <section className="transition-all duration-300">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="w-1.5 h-5 bg-indigo-600 dark:bg-valuenova-accent rounded-full"></span>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Slack Channel</h3>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-grow">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">#</span>
+                    <input
+                      type="text"
+                      name="slackChannel"
+                      value={(formData.slackChannel || '').replace(/^#/, '')}
+                      onChange={(e) => {
+                        if (!readOnly) {
+                          setFormData(prev => ({ ...prev, slackChannel: e.target.value.replace(/^#/, '') }));
+                        }
+                      }}
+                      disabled={readOnly}
+                      placeholder="channel-name"
+                      className={`${inputClass} pl-7`}
+                    />
+                  </div>
+                  {formData.slackChannel && (
+                    <button
+                      type="button"
+                      onClick={handleCopySlackChannel}
+                      className="px-3 py-2 border border-gray-200 dark:border-valuenova-border rounded-lg text-xs font-bold text-gray-500 dark:text-valuenova-muted hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-1"
+                      title="Copy to clipboard"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-[10px] text-gray-400">Reference only. Link to a Slack channel for team discussions.</p>
+              </section>
+
+              {/* Outline Section (Collapsible) */}
+              <section className="transition-all duration-300">
+                <SectionHeader title="Activity Outline" sectionKey="outline" />
+                {!collapsedSections.outline && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-3">
+                    <textarea
+                      name="outline"
+                      value={formData.outline || ''}
+                      onChange={(e) => {
+                        if (!readOnly) {
+                          setFormData(prev => ({ ...prev, outline: e.target.value }));
+                        }
+                      }}
+                      disabled={readOnly}
+                      placeholder="Add notes, agenda items, or key details about this activity..."
+                      rows={isOutlineExpanded ? 8 : 3}
+                      className={`${inputClass} resize-none`}
+                    />
+                    {(formData.outline || '').length > 150 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsOutlineExpanded(!isOutlineExpanded)}
+                        className="text-xs font-bold text-indigo-600 dark:text-valuenova-accent hover:underline"
+                      >
+                        {isOutlineExpanded ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {/* Calendar Invite Section */}
+              <section className="transition-all duration-300">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="w-1.5 h-5 bg-indigo-600 dark:bg-valuenova-accent rounded-full"></span>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Calendar Invite</h3>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-valuenova-bg rounded-xl border border-gray-100 dark:border-valuenova-border">
+                  {canDownloadICS ? (
+                    <button
+                      type="button"
+                      onClick={handleDownloadICS}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-lg text-xs font-black hover:bg-indigo-700 dark:hover:brightness-110 transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Download .ics
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-xs font-medium">Add a schedule to generate an invite.</span>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[10px] text-gray-400">Export to Outlook or Google Calendar.</p>
+                </div>
+              </section>
+
+              {/* Comments Section */}
+              <section className="transition-all duration-300">
+                <SectionHeader title="Comments" sectionKey="comments" />
+                {!collapsedSections.comments && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                    {/* Add comment form */}
+                    {!readOnly && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          placeholder="Add a comment..."
+                          className={inputClass}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newCommentText.trim()) {
+                              handleAddComment();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddComment}
+                          disabled={!newCommentText.trim()}
+                          className="px-3 py-2 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
+                    {/* Comments list */}
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {(formData.inlineComments || []).length === 0 ? (
+                        <p className="text-xs text-gray-400 italic">No comments yet.</p>
+                      ) : (
+                        (formData.inlineComments || []).map((comment) => (
+                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-valuenova-bg rounded-lg border border-gray-100 dark:border-valuenova-border">
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex-grow">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-bold text-gray-700 dark:text-white">{comment.authorName}</span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600 dark:text-gray-300">{comment.content}</p>
+                              </div>
+                              {!readOnly && currentUser?.id === comment.authorId && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveComment(comment.id)}
+                                  className="text-gray-300 hover:text-red-500 transition-colors"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
 
             <div className="space-y-10">
@@ -639,6 +881,14 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
                           {(formData.attachments || []).length} Linked
                        </span>
                     </div>
+                    {activity?.updatedAt && (
+                      <div className="flex justify-between text-xs border-t border-indigo-100/50 dark:border-indigo-800/20 pt-2">
+                        <span className="font-bold text-gray-500">Last Updated</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-400">
+                          {new Date(activity.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
                  </div>
               </section>
             </div>

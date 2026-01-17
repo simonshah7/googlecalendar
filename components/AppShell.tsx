@@ -762,6 +762,8 @@ export default function AppShell({
               activities={filteredActivities}
               campaigns={campaigns}
               activityTypes={activityTypes}
+              swimlanes={swimlanes}
+              vendors={vendors}
               onEdit={(a) => { setEditingActivity(a); setIsModalOpen(true); }}
               onDuplicate={(id) => {
                 const a = activities.find(x => x.id === id);
