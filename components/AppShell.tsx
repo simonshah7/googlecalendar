@@ -49,7 +49,14 @@ export default function AppShell({
   const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [activeCalendarId, setActiveCalendarId] = useState<string>(initialActiveCalendarId);
   const [view, setView] = useState<ViewType>('timeline');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // Check localStorage for saved preference, default to true (dark mode)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('darkMode');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Data state
@@ -69,10 +76,14 @@ export default function AppShell({
     search: '', campaignId: 'all', status: 'all', dateRange: 'all', startDate: '', endDate: '',
   });
 
-  // Dark mode effect
+  // Dark mode effect - also persists preference to localStorage
   useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', String(isDarkMode));
   }, [isDarkMode]);
 
   // Load calendar data when active calendar changes

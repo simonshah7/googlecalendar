@@ -72,7 +72,7 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </button>
 
-        {/* Updated sync status - Now shows "Local Storage" instead of misleading "Neon Cloud" */}
+        {/* Sync status indicator - Connected to Neon Cloud Database */}
         <div className="hidden lg:flex items-center gap-3 px-3 py-1 bg-gray-50 dark:bg-valuenova-surface rounded-full border border-gray-100 dark:border-valuenova-border">
           {isSyncing ? (
             <div className="flex items-center gap-1.5">
@@ -80,11 +80,11 @@ const Header: React.FC<HeaderProps> = ({
               <span className="text-[9px] font-black uppercase text-indigo-500 tracking-widest">Saving</span>
             </div>
           ) : (
-            <Tooltip content="Data is stored locally in your browser" position="bottom">
+            <Tooltip content="Data synced to Neon cloud database" position="bottom">
               <div className="flex items-center gap-1.5 cursor-help">
-                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                 <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                  Local Only
+                  Cloud Synced
                 </span>
               </div>
             </Tooltip>
