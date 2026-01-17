@@ -415,6 +415,67 @@ export default function AppShell({
     router.refresh();
   };
 
+  // Helper function to convert modern CSS color functions to RGB for html2canvas compatibility
+  // html2canvas doesn't support modern CSS color functions like lab(), oklch(), oklab(), lch()
+  // which are used by Tailwind CSS v4. This function applies all computed color values as
+  // inline styles and sanitizes stylesheets to prevent parsing errors.
+  const convertModernColorsToRgb = (clonedDoc: Document, element: HTMLElement) => {
+    const colorProperties = [
+      'color', 'backgroundColor', 'borderColor', 'borderTopColor',
+      'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+      'outlineColor', 'textDecorationColor', 'caretColor', 'fill', 'stroke'
+    ];
+
+    const processElement = (el: Element) => {
+      if (!(el instanceof HTMLElement)) return;
+
+      const computedStyle = clonedDoc.defaultView?.getComputedStyle(el) || window.getComputedStyle(el);
+
+      // Apply all color properties as inline styles with computed RGB values
+      colorProperties.forEach(prop => {
+        const cssProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+        const value = computedStyle.getPropertyValue(cssProp);
+        if (value && value !== 'none' && value !== 'transparent' && value !== '') {
+          // Force override with computed value (browsers compute to RGB)
+          el.style.setProperty(cssProp, value, 'important');
+        }
+      });
+
+      // Also handle box-shadow and text-shadow which may contain colors
+      const boxShadow = computedStyle.getPropertyValue('box-shadow');
+      if (boxShadow && boxShadow !== 'none') {
+        el.style.setProperty('box-shadow', boxShadow, 'important');
+      }
+      const textShadow = computedStyle.getPropertyValue('text-shadow');
+      if (textShadow && textShadow !== 'none') {
+        el.style.setProperty('text-shadow', textShadow, 'important');
+      }
+
+      // Process children
+      Array.from(el.children).forEach(child => processElement(child));
+    };
+
+    processElement(element);
+
+    // Sanitize stylesheets by removing rules that contain unsupported color functions
+    // This is safer than removing all stylesheets as it preserves layout and other styles
+    const styleElements = clonedDoc.querySelectorAll('style');
+    styleElements.forEach(styleEl => {
+      try {
+        const cssText = styleEl.textContent || '';
+        // Remove any rules containing modern color functions that html2canvas can't parse
+        const sanitizedCss = cssText.replace(
+          /[^{}]*\{[^{}]*(lab|oklch|oklab|lch)\s*\([^)]*\)[^{}]*\}/gi,
+          ''
+        );
+        styleEl.textContent = sanitizedCss;
+      } catch {
+        // If we can't modify the stylesheet, remove it
+        styleEl.remove();
+      }
+    });
+  };
+
   // Export handler
   const handleExport = async (config: ExportConfig) => {
     setIsExportOpen(false);
@@ -495,6 +556,14 @@ export default function AppShell({
             logging: false,
             windowWidth: timeline.scrollWidth,
             windowHeight: timeline.scrollHeight,
+            onclone: (clonedDoc) => {
+              // Convert modern CSS color functions (lab, oklch, etc.) to RGB
+              // This fixes html2canvas compatibility with Tailwind CSS v4
+              const clonedTimeline = clonedDoc.querySelector('.timeline-container') as HTMLElement;
+              if (clonedTimeline) {
+                convertModernColorsToRgb(clonedDoc, clonedTimeline);
+              }
+            },
           });
 
           // Restore scroll position
