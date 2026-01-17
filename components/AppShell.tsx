@@ -421,10 +421,41 @@ export default function AppShell({
     setIsSyncing(true);
 
     try {
+      // Filter activities by date range if specified
+      let exportActivities = filteredActivities;
+      const year = config.year || new Date().getFullYear();
+
+      if (config.type === 'monthly' && config.selectedPeriods.length > 0) {
+        exportActivities = filteredActivities.filter(a => {
+          const startMonth = new Date(a.startDate).getMonth() + 1;
+          const endMonth = new Date(a.endDate).getMonth() + 1;
+          return config.selectedPeriods.some(p => {
+            const month = parseInt(p);
+            return startMonth <= month && endMonth >= month;
+          });
+        });
+      } else if (config.type === 'quarterly' && config.selectedPeriods.length > 0) {
+        const quarterMonths: Record<string, number[]> = {
+          'Q1': [1, 2, 3], 'Q2': [4, 5, 6], 'Q3': [7, 8, 9], 'Q4': [10, 11, 12]
+        };
+        exportActivities = filteredActivities.filter(a => {
+          const startMonth = new Date(a.startDate).getMonth() + 1;
+          const endMonth = new Date(a.endDate).getMonth() + 1;
+          return config.selectedPeriods.some(q => {
+            const months = quarterMonths[q] || [];
+            return months.some(m => startMonth <= m && endMonth >= m);
+          });
+        });
+      } else if (config.type === 'custom' && config.startDate && config.endDate) {
+        exportActivities = filteredActivities.filter(a => {
+          return a.endDate >= config.startDate! && a.startDate <= config.endDate!;
+        });
+      }
+
       // For CSV export, generate and download immediately
       if (config.format === 'csv') {
-        const headers = ['Title', 'Start Date', 'End Date', 'Status', 'Swimlane', 'Campaign', 'Cost', 'Currency'];
-        const rows = filteredActivities.map(a => [
+        const headers = ['Title', 'Start Date', 'End Date', 'Status', 'Swimlane', 'Campaign', 'Cost', 'Currency', 'Region', 'Description'];
+        const rows = exportActivities.map(a => [
           a.title,
           a.startDate,
           a.endDate,
@@ -432,14 +463,16 @@ export default function AppShell({
           swimlanes.find(s => s.id === a.swimlaneId)?.name || '',
           campaigns.find(c => c.id === a.campaignId)?.name || '',
           a.cost.toString(),
-          a.currency
+          a.currency,
+          a.region,
+          a.description || ''
         ]);
-        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `campaign-export-${config.type}-${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
         URL.revokeObjectURL(url);
       } else {
@@ -447,19 +480,39 @@ export default function AppShell({
         const { default: html2canvas } = await import('html2canvas');
         const timeline = document.querySelector('.timeline-container') as HTMLElement;
         if (timeline) {
+          // Store original scroll position
+          const originalScrollLeft = timeline.scrollLeft;
+          const originalScrollTop = timeline.scrollTop;
+
+          // For better export, temporarily scroll to show full timeline
+          timeline.scrollLeft = 0;
+          timeline.scrollTop = 0;
+
           const canvas = await html2canvas(timeline, {
-            scale: 2,
-            backgroundColor: isDarkMode ? '#0B0E14' : '#ffffff'
+            scale: config.format === 'slides' ? 3 : 2,
+            backgroundColor: isDarkMode ? '#0B0E14' : '#ffffff',
+            useCORS: true,
+            logging: false,
+            windowWidth: timeline.scrollWidth,
+            windowHeight: timeline.scrollHeight,
           });
+
+          // Restore scroll position
+          timeline.scrollLeft = originalScrollLeft;
+          timeline.scrollTop = originalScrollTop;
+
           const link = document.createElement('a');
-          link.download = `campaign-export-${new Date().toISOString().split('T')[0]}.${config.format === 'pdf' ? 'png' : config.format}`;
-          link.href = canvas.toDataURL('image/png');
+          const extension = config.format === 'pdf' ? 'png' : config.format === 'slides' ? 'png' : config.format;
+          link.download = `campaign-report-${config.type}-${year}-${new Date().toISOString().split('T')[0]}.${extension}`;
+          link.href = canvas.toDataURL('image/png', 1.0);
           link.click();
+        } else {
+          throw new Error('Timeline container not found. Please switch to Timeline view to export.');
         }
       }
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      alert(error instanceof Error ? error.message : 'Export failed. Please try again.');
     } finally {
       setIsSyncing(false);
     }

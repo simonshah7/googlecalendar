@@ -90,11 +90,22 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
 
   useEffect(() => {
     if (activity) {
-      setFormData(prev => ({ ...getInitialFormData(), ...prev, ...activity } as Omit<Activity, 'id'>));
+      // Reset form data completely when a new activity is loaded
+      // This ensures swimlane and all other fields reflect the activity's current state
+      const initialData = getInitialFormData();
+      const activityData = {
+        ...initialData,
+        ...activity,
+        // Ensure swimlaneId is valid - fall back to first swimlane if not found
+        swimlaneId: swimlanes.some(s => s.id === activity.swimlaneId)
+          ? activity.swimlaneId
+          : (swimlanes[0]?.id || ''),
+      };
+      setFormData(activityData as Omit<Activity, 'id'>);
     } else {
       setFormData(getInitialFormData());
     }
-  }, [activity]);
+  }, [activity, swimlanes]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     if (readOnly) return;

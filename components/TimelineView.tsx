@@ -64,7 +64,8 @@ const ActivityBar: React.FC<{
   readOnly?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string, isShiftClick: boolean) => void;
-}> = ({ activity, timelineStartDate, top, density, onMouseDown, onTouchStart, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect }) => {
+  lastDragEndTimeRef?: React.MutableRefObject<number>;
+}> = ({ activity, timelineStartDate, top, density, onMouseDown, onTouchStart, onDoubleClick, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect, lastDragEndTimeRef }) => {
   const startOffsetDays = diffDaysUTC(formatDate(timelineStartDate), activity.startDate);
   const durationDays = diffDaysUTC(activity.startDate, activity.endDate) + 1;
 
@@ -112,6 +113,10 @@ const ActivityBar: React.FC<{
       onDoubleClick={(e) => {
         if (isGhost) return;
         e.stopPropagation();
+        // Prevent double-click if a drag just ended (within 300ms)
+        if (lastDragEndTimeRef && Date.now() - lastDragEndTimeRef.current < 300) {
+          return;
+        }
         onDoubleClick(activity);
       }}
       onClick={(e) => {
@@ -282,8 +287,17 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   const [draggedSwimlaneIndex, setDraggedSwimlaneIndex] = useState<number | null>(null);
   const [dragOverSwimlaneIndex, setDragOverSwimlaneIndex] = useState<number | null>(null);
 
+  // Resizable sidebar width
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [resizingSidebar, setResizingSidebar] = useState<{
+    startX: number;
+    initialWidth: number;
+  } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const lastDragEndTimeRef = useRef<number>(0);
+  const dragOccurredRef = useRef<boolean>(false);
 
   // Expose methods via ref for keyboard shortcuts
   useImperativeHandle(ref, () => ({
@@ -391,6 +405,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   const handleMouseDown = (e: React.MouseEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => {
     if (readOnly) return;
     e.preventDefault();
+    dragOccurredRef.current = false;
     setDragState({
       activity,
       mode,
@@ -408,6 +423,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
   const handleTouchStart = (e: React.TouchEvent, activity: Activity, mode: 'drag' | 'resize-left' | 'resize-right') => {
     if (readOnly) return;
     const touch = e.touches[0];
+    dragOccurredRef.current = false;
     setDragState({
       activity,
       mode,
@@ -430,6 +446,15 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
       id,
       startY: e.clientY,
       initialHeight,
+    });
+  };
+
+  const startSidebarResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingSidebar({
+      startX: e.clientX,
+      initialWidth: sidebarWidth,
     });
   };
 
@@ -469,6 +494,11 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
         const deltaX = clientX - dragState.startX;
         const deltaY = clientY - dragState.startY;
 
+        // Mark drag as having occurred if there's significant movement
+        if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+          dragOccurredRef.current = true;
+        }
+
         const deltaDays = Math.round(deltaX / dayWidth);
         const { activity, mode, initialStart, initialEnd } = dragState;
 
@@ -480,17 +510,40 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
           newStart = formatDate(addDays(new Date(initialStart), deltaDays));
           newEnd = formatDate(addDays(new Date(initialEnd), deltaDays));
 
-          if (canvasRef.current) {
+          if (canvasRef.current && containerRef.current) {
             const canvasRect = canvasRef.current.getBoundingClientRect();
-            const relativeY = clientY - canvasRect.top;
+            // Account for scroll position and header height (64px)
+            const scrollTop = containerRef.current.scrollTop;
+            const headerHeight = 64; // Fixed header height in timeline
+            const relativeY = clientY - canvasRect.top + scrollTop - headerHeight;
 
-            const targetSwimlane = swimlanes.find(s => {
+            // Find target swimlane based on Y position with better detection
+            let foundSwimlane = null;
+            for (const s of swimlanes) {
               const bounds = swimlaneOffsets[s.id];
-              return relativeY >= bounds.top && relativeY <= (bounds.top + bounds.height);
-            });
+              // Use a margin to make swimlane detection more forgiving
+              if (relativeY >= bounds.top - 10 && relativeY <= (bounds.top + bounds.height + 10)) {
+                foundSwimlane = s;
+                break;
+              }
+            }
 
-            if (targetSwimlane) {
-                newSwimlaneId = targetSwimlane.id;
+            if (foundSwimlane) {
+              newSwimlaneId = foundSwimlane.id;
+            } else {
+              // Fallback: find the closest swimlane if outside bounds
+              let closestSwimlane = swimlanes[0];
+              let closestDistance = Infinity;
+              for (const s of swimlanes) {
+                const bounds = swimlaneOffsets[s.id];
+                const center = bounds.top + bounds.height / 2;
+                const distance = Math.abs(relativeY - center);
+                if (distance < closestDistance) {
+                  closestDistance = distance;
+                  closestSwimlane = s;
+                }
+              }
+              newSwimlaneId = closestSwimlane.id;
             }
           }
         } else if (mode === 'resize-left') {
@@ -522,6 +575,12 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
           [resizingSwimlane.id]: newHeight
         }));
       }
+
+      if (resizingSidebar) {
+        const deltaX = clientX - resizingSidebar.startX;
+        const newWidth = Math.max(160, Math.min(500, resizingSidebar.initialWidth + deltaX));
+        setSidebarWidth(newWidth);
+      }
     };
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -544,12 +603,17 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
             ghostActivity.swimlaneId !== dragState.activity.swimlaneId) {
           onUpdate(ghostActivity);
         }
+        // Record the drag end time to prevent accidental double-click
+        if (dragOccurredRef.current) {
+          lastDragEndTimeRef.current = Date.now();
+        }
       }
       setDragState(null);
       setResizingSwimlane(null);
+      setResizingSidebar(null);
     };
 
-    if (dragState || resizingSwimlane) {
+    if (dragState || resizingSwimlane || resizingSidebar) {
       window.addEventListener('mousemove', handleGlobalMouseMove);
       window.addEventListener('mouseup', handleEnd);
       window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
@@ -563,7 +627,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
       window.removeEventListener('touchend', handleEnd);
       window.removeEventListener('touchcancel', handleEnd);
     };
-  }, [dragState, resizingSwimlane, dayWidth, onUpdate, swimlanes, swimlaneOffsets]);
+  }, [dragState, resizingSwimlane, resizingSidebar, dayWidth, onUpdate, swimlanes, swimlaneOffsets]);
 
   const handleCanvasClick = (e: React.MouseEvent, swimlaneId: string) => {
     if (readOnly) return;
@@ -645,8 +709,17 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
         )}
       </div>
 
-      <div className="flex-grow overflow-auto scrollbar-hide flex relative" ref={containerRef}>
-        <div className="flex flex-col sticky left-0 z-30 bg-white/95 dark:bg-valuenova-bg/95 backdrop-blur-sm border-r border-gray-200 dark:border-valuenova-border w-64 shrink-0 shadow-xl shadow-black/5 transition-colors">
+      <div className="flex-grow overflow-auto scrollbar-hide flex relative timeline-container" ref={containerRef}>
+        <div className="flex flex-col sticky left-0 z-30 bg-white/95 dark:bg-valuenova-bg/95 backdrop-blur-sm border-r border-gray-200 dark:border-valuenova-border shrink-0 shadow-xl shadow-black/5 transition-colors relative" style={{ width: `${sidebarWidth}px` }}>
+          {/* Sidebar resize handle */}
+          <div
+            className="absolute right-0 top-0 h-full w-1 cursor-ew-resize z-50 hover:bg-indigo-400 dark:hover:bg-valuenova-accent transition-colors group"
+            onMouseDown={startSidebarResize}
+          >
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-8 -mr-1.5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-1 h-6 rounded-full bg-indigo-400 dark:bg-valuenova-accent" />
+            </div>
+          </div>
           <div className="h-16 border-b border-gray-100 dark:border-valuenova-border"></div>
           {swimlanes.map((swimlane, index) => {
             const height = swimlaneOffsets[swimlane.id].height;
@@ -832,6 +905,7 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
                           readOnly={readOnly}
                           isSelected={selectedActivities?.has(activity.id)}
                           onSelect={onSelectActivity}
+                          lastDragEndTimeRef={lastDragEndTimeRef}
                         />
                       );
                     })
