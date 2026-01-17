@@ -1,24 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, calendars, activities, swimlanes, campaigns, calendarPermissions } from '@/db';
+import { db, calendars, activities, swimlanes, campaigns, calendarPermissions, campaignPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, asc, and } from 'drizzle-orm';
+import { eq, asc, and, inArray } from 'drizzle-orm';
 
 /**
- * Helper function to check if user can view a calendar.
- * Users can view calendars they own, have any permission for,
- * or all calendars if they are a Manager/Admin.
- *
- * Note: Database stores roles as 'Manager'/'Admin' (title case), not uppercase.
+ * Access level result for calendar access check.
+ * - 'full': User has full calendar access (owner, calendar permission, or manager/admin)
+ * - 'campaign_only': User only has access to specific campaigns within this calendar
+ * - 'none': User has no access
  */
-async function canViewCalendar(userId: string, userRole: string, calendarId: string, calendarOwnerId: string): Promise<boolean> {
-  // Managers and admins can access all calendars
-  if (userRole === 'Manager' || userRole === 'Admin') return true;
+type CalendarAccessLevel = 'full' | 'campaign_only' | 'none';
+
+/**
+ * Helper function to check user's access level to a calendar.
+ * Returns the access level and list of accessible campaign IDs (if campaign_only).
+ */
+async function getCalendarAccessLevel(
+  userId: string,
+  userRole: string,
+  calendarId: string,
+  calendarOwnerId: string
+): Promise<{ level: CalendarAccessLevel; accessibleCampaignIds?: string[]; canEdit: boolean }> {
+  // Managers and admins have full access
+  if (userRole === 'Manager' || userRole === 'Admin') {
+    return { level: 'full', canEdit: true };
+  }
 
   // Check if user owns the calendar
-  if (calendarOwnerId === userId) return true;
+  if (calendarOwnerId === userId) {
+    return { level: 'full', canEdit: true };
+  }
 
-  // Check if user has any permission for this calendar
-  const [permission] = await db
+  // Check if user has calendar-level permission
+  const [calPerm] = await db
     .select()
     .from(calendarPermissions)
     .where(and(
@@ -27,7 +41,48 @@ async function canViewCalendar(userId: string, userRole: string, calendarId: str
     ))
     .limit(1);
 
-  return !!permission;
+  if (calPerm) {
+    return { level: 'full', canEdit: calPerm.accessType === 'edit' };
+  }
+
+  // Check if user has campaign-level permissions for campaigns in this calendar
+  const calendarCampaigns = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(eq(campaigns.calendarId, calendarId));
+
+  if (calendarCampaigns.length === 0) {
+    return { level: 'none', canEdit: false };
+  }
+
+  const campaignIds = calendarCampaigns.map(c => c.id);
+  const campPerms = await db
+    .select()
+    .from(campaignPermissions)
+    .where(and(
+      inArray(campaignPermissions.campaignId, campaignIds),
+      eq(campaignPermissions.userId, userId)
+    ));
+
+  if (campPerms.length > 0) {
+    const accessibleCampaignIds = campPerms.map(p => p.campaignId);
+    const canEdit = campPerms.some(p => p.accessType === 'edit');
+    return { level: 'campaign_only', accessibleCampaignIds, canEdit };
+  }
+
+  return { level: 'none', canEdit: false };
+}
+
+/**
+ * Helper function to check if user can view a calendar.
+ * Users can view calendars they own, have any permission for,
+ * have campaign permissions for, or all calendars if they are a Manager/Admin.
+ *
+ * Note: Database stores roles as 'Manager'/'Admin' (title case), not uppercase.
+ */
+async function canViewCalendar(userId: string, userRole: string, calendarId: string, calendarOwnerId: string): Promise<boolean> {
+  const access = await getCalendarAccessLevel(userId, userRole, calendarId, calendarOwnerId);
+  return access.level !== 'none';
 }
 
 /**
@@ -60,6 +115,11 @@ async function canEditCalendar(userId: string, userRole: string, calendarId: str
  *
  * Returns the calendar along with its activities, swimlanes, and campaigns.
  * Security: Validates user has view access to the calendar.
+ *
+ * For campaign-only users:
+ * - Returns all swimlanes (needed for activity context)
+ * - Returns only campaigns they have access to
+ * - Returns only activities belonging to accessible campaigns
  */
 export async function GET(
   request: NextRequest,
@@ -79,24 +139,53 @@ export async function GET(
       return NextResponse.json({ error: 'Calendar not found' }, { status: 404 });
     }
 
-    // Check authorization
-    const hasAccess = await canViewCalendar(user.id, user.role, id, calendar.ownerId);
-    if (!hasAccess) {
+    // Check authorization and get access level
+    const access = await getCalendarAccessLevel(user.id, user.role, id, calendar.ownerId);
+    if (access.level === 'none') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get related data in parallel for better performance
-    const [calendarActivities, calendarSwimlanes, calendarCampaigns] = await Promise.all([
-      db.select().from(activities).where(eq(activities.calendarId, id)),
-      db.select().from(swimlanes).where(eq(swimlanes.calendarId, id)).orderBy(asc(swimlanes.sortOrder)),
-      db.select().from(campaigns).where(eq(campaigns.calendarId, id))
-    ]);
+    // Get swimlanes (always return all - needed for context)
+    const calendarSwimlanes = await db
+      .select()
+      .from(swimlanes)
+      .where(eq(swimlanes.calendarId, id))
+      .orderBy(asc(swimlanes.sortOrder));
+
+    // Get campaigns - filter if campaign-only access
+    let calendarCampaigns = await db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.calendarId, id));
+
+    // Get activities - filter if campaign-only access
+    let calendarActivities = await db
+      .select()
+      .from(activities)
+      .where(eq(activities.calendarId, id));
+
+    // If user has campaign-only access, filter the results
+    if (access.level === 'campaign_only' && access.accessibleCampaignIds) {
+      const accessibleIds = access.accessibleCampaignIds;
+
+      // Filter campaigns to only accessible ones
+      calendarCampaigns = calendarCampaigns.filter(c => accessibleIds.includes(c.id));
+
+      // Filter activities to only those in accessible campaigns
+      // Include activities with no campaign (campaignId is null/empty) as they're general
+      calendarActivities = calendarActivities.filter(a =>
+        !a.campaignId || accessibleIds.includes(a.campaignId)
+      );
+    }
 
     return NextResponse.json({
       calendar,
       activities: calendarActivities,
       swimlanes: calendarSwimlanes,
       campaigns: calendarCampaigns,
+      // Include access info so frontend knows user's permission level
+      accessLevel: access.level,
+      canEdit: access.canEdit,
     });
   } catch (error) {
     console.error('Error fetching calendar:', error);

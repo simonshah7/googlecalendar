@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, calendarPermissions, calendars, users } from '@/db';
+import { db, calendarPermissions, calendars, users, notifications } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 
@@ -89,6 +89,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already has access to this calendar' }, { status: 409 });
     }
 
+    // Get calendar details for notification
+    const [calendar] = await db.select().from(calendars).where(eq(calendars.id, calendarId)).limit(1);
+
     // Create permission
     const [newPermission] = await db
       .insert(calendarPermissions)
@@ -98,6 +101,16 @@ export async function POST(request: NextRequest) {
         accessType,
       })
       .returning();
+
+    // Create notification for the invited user
+    await db.insert(notifications).values({
+      userId: targetUser.id,
+      type: 'calendar_invite',
+      title: 'Workspace Invitation',
+      message: `${user.name} invited you to collaborate on workspace "${calendar?.name || 'Unknown'}" with ${accessType} access.`,
+      relatedType: 'calendar',
+      relatedId: calendarId,
+    });
 
     return NextResponse.json({
       permission: {

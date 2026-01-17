@@ -77,6 +77,25 @@ export const historyActionEnum = pgEnum('history_action', [
   'created', 'updated', 'deleted', 'status_changed', 'moved', 'duplicated'
 ]);
 
+/**
+ * Notification types for in-app notifications.
+ */
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'calendar_invite',
+  'campaign_invite',
+  'comment_added',
+  'activity_created',
+  'activity_updated',
+  'permission_changed'
+]);
+
+/**
+ * Related entity types for notifications.
+ */
+export const notificationRelatedTypeEnum = pgEnum('notification_related_type', [
+  'calendar', 'campaign', 'activity', 'comment'
+]);
+
 // ============================================================================
 // TABLES
 // ============================================================================
@@ -260,6 +279,43 @@ export const activityHistory = pgTable('activity_history', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Campaign Permissions table - Manages shared access to campaigns.
+ *
+ * Allows campaign-level sharing separate from calendar permissions.
+ * Users can have access to specific campaigns even without full calendar access.
+ * This is an "additive" permission model - campaign permissions extend calendar permissions.
+ */
+export const campaignPermissions = pgTable('campaign_permissions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  accessType: accessTypeEnum('access_type').default('view').notNull(),
+  invitedBy: uuid('invited_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+/**
+ * Notifications table - In-app notifications for collaboration.
+ *
+ * Tracks notifications for various events like:
+ * - Being invited to a calendar or campaign
+ * - Comments on activities
+ * - Activity updates in shared content
+ */
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: notificationTypeEnum('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  relatedType: notificationRelatedTypeEnum('related_type'),
+  relatedId: uuid('related_id'), // ID of the related entity (calendar, campaign, activity, comment)
+  read: boolean('read').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // ============================================================================
 // RELATIONS
 // ============================================================================
@@ -270,6 +326,8 @@ export const activityHistory = pgTable('activity_history', {
 export const usersRelations = relations(users, ({ many }) => ({
   calendars: many(calendars),
   permissions: many(calendarPermissions),
+  campaignPermissions: many(campaignPermissions),
+  notifications: many(notifications),
 }));
 
 /**
@@ -297,6 +355,7 @@ export const calendarPermissionsRelations = relations(calendarPermissions, ({ on
 export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
   calendar: one(calendars, { fields: [campaigns.calendarId], references: [calendars.id] }),
   activities: many(activities),
+  permissions: many(campaignPermissions),
 }));
 
 /**
@@ -336,6 +395,22 @@ export const activityHistoryRelations = relations(activityHistory, ({ one }) => 
   user: one(users, { fields: [activityHistory.userId], references: [users.id] }),
 }));
 
+/**
+ * Campaign Permissions relations - Links a campaign and user together.
+ */
+export const campaignPermissionsRelations = relations(campaignPermissions, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignPermissions.campaignId], references: [campaigns.id] }),
+  user: one(users, { fields: [campaignPermissions.userId], references: [users.id] }),
+  inviter: one(users, { fields: [campaignPermissions.invitedBy], references: [users.id] }),
+}));
+
+/**
+ * Notifications relations - Belongs to a user.
+ */
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}));
+
 // ============================================================================
 // TYPE EXPORTS
 // ============================================================================
@@ -360,3 +435,7 @@ export type DbActivityComment = typeof activityComments.$inferSelect;
 export type NewActivityComment = typeof activityComments.$inferInsert;
 export type DbActivityHistory = typeof activityHistory.$inferSelect;
 export type NewActivityHistory = typeof activityHistory.$inferInsert;
+export type DbCampaignPermission = typeof campaignPermissions.$inferSelect;
+export type NewCampaignPermission = typeof campaignPermissions.$inferInsert;
+export type DbNotification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
