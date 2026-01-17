@@ -1,13 +1,24 @@
+/**
+ * ExportModal Component
+ *
+ * Provides a UI for configuring and initiating calendar exports.
+ * Supports multiple export formats (PNG, PDF, CSV, Slides) and
+ * different time scope options (monthly, quarterly, annual, custom).
+ */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import DatePicker from './DatePicker';
 
+/**
+ * Configuration object passed to the export handler.
+ */
 export type ExportConfig = {
     type: 'monthly' | 'quarterly' | 'annual' | 'custom';
     selectedPeriods: string[]; // e.g., ["1", "2", "Q1"]
     format: 'pdf' | 'png' | 'csv' | 'slides';
     startDate?: string;
     endDate?: string;
+    year?: number; // The year for monthly/quarterly/annual exports
 };
 
 interface ExportModalProps {
@@ -16,11 +27,15 @@ interface ExportModalProps {
 }
 
 const ExportModal: React.FC<ExportModalProps> = ({ onClose, onStartExport }) => {
+    // Get current year for dynamic date defaults
+    const currentYear = useMemo(() => new Date().getFullYear(), []);
+
     const [type, setType] = useState<'monthly' | 'quarterly' | 'annual' | 'custom'>('monthly');
     const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
     const [format, setFormat] = useState<'pdf' | 'png' | 'csv' | 'slides'>('png');
-    const [customStartDate, setCustomStartDate] = useState('2025-01-01');
-    const [customEndDate, setCustomEndDate] = useState('2025-12-31');
+    // Initialize with current year's date range
+    const [customStartDate, setCustomStartDate] = useState(`${currentYear}-01-01`);
+    const [customEndDate, setCustomEndDate] = useState(`${currentYear}-12-31`);
 
     const months = [
         "January", "February", "March", "April", "May", "June", 
@@ -34,18 +49,29 @@ const ExportModal: React.FC<ExportModalProps> = ({ onClose, onStartExport }) => 
         );
     };
 
+    /**
+     * Validate and submit the export configuration.
+     */
     const handleConfirm = () => {
+        // Validate period selection for monthly/quarterly exports
         if (type !== 'annual' && type !== 'custom' && selectedPeriods.length === 0) {
             alert('Please select at least one period to export.');
             return;
         }
-        
-        onStartExport({ 
-            type, 
-            selectedPeriods, 
+
+        // Validate custom date range
+        if (type === 'custom' && customStartDate > customEndDate) {
+            alert('Start date cannot be after end date.');
+            return;
+        }
+
+        onStartExport({
+            type,
+            selectedPeriods,
             format,
             startDate: type === 'custom' ? customStartDate : undefined,
-            endDate: type === 'custom' ? customEndDate : undefined
+            endDate: type === 'custom' ? customEndDate : undefined,
+            year: currentYear
         });
     };
 
@@ -164,7 +190,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ onClose, onStartExport }) => 
 
                     {type === 'annual' && (
                         <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 text-center">
-                            <p className="text-sm font-bold text-indigo-600 dark:text-valuenova-accent">Full Year 2025 Report</p>
+                            <p className="text-sm font-bold text-indigo-600 dark:text-valuenova-accent">Full Year {currentYear} Report</p>
                             <p className="text-xs text-indigo-400 mt-1 italic">Single high-resolution panorama of the entire roadmap.</p>
                         </div>
                     )}

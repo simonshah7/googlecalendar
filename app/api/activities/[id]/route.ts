@@ -1,19 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, activities, calendars } from '@/db';
+import { db, activities, calendars, calendarPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
-// Helper to check if user can access calendar
-async function canAccessCalendar(userId: string, userRole: string, calendarId: string): Promise<boolean> {
-  // Managers and admins can access all calendars
-  if (userRole === 'MANAGER' || userRole === 'ADMIN') return true;
+/**
+ * Helper function to check if user can view a calendar.
+ * Users can view calendars they own, have any permission for,
+ * or all calendars if they are a Manager/Admin.
+ *
+ * @param userId - The ID of the current user
+ * @param userRole - The role of the current user (User, Manager, Admin)
+ * @param calendarId - The calendar ID to check access for
+ * @returns Boolean indicating if user can view
+ */
+async function canViewCalendar(userId: string, userRole: string, calendarId: string): Promise<boolean> {
+  // Managers and admins can access all calendars (note: DB stores 'Manager'/'Admin', not uppercase)
+  if (userRole === 'Manager' || userRole === 'Admin') return true;
 
   // Check if user owns the calendar
   const [calendar] = await db.select().from(calendars).where(eq(calendars.id, calendarId)).limit(1);
-  return calendar?.ownerId === userId;
+  if (calendar?.ownerId === userId) return true;
+
+  // Check if user has any permission for this calendar
+  const [permission] = await db
+    .select()
+    .from(calendarPermissions)
+    .where(and(
+      eq(calendarPermissions.calendarId, calendarId),
+      eq(calendarPermissions.userId, userId)
+    ))
+    .limit(1);
+
+  return !!permission;
 }
 
-// GET /api/activities/[id] - Get a specific activity
+/**
+ * Helper function to check if user can edit a calendar.
+ * Users can edit calendars they own, have 'edit' permission for,
+ * or all calendars if they are a Manager/Admin.
+ *
+ * @param userId - The ID of the current user
+ * @param userRole - The role of the current user
+ * @param calendarId - The calendar ID to check access for
+ * @returns Boolean indicating if user can edit
+ */
+async function canEditCalendar(userId: string, userRole: string, calendarId: string): Promise<boolean> {
+  // Managers and admins can edit all calendars
+  if (userRole === 'Manager' || userRole === 'Admin') return true;
+
+  // Check if user owns the calendar
+  const [calendar] = await db.select().from(calendars).where(eq(calendars.id, calendarId)).limit(1);
+  if (calendar?.ownerId === userId) return true;
+
+  // Check if user has edit permission
+  const [permission] = await db
+    .select()
+    .from(calendarPermissions)
+    .where(and(
+      eq(calendarPermissions.calendarId, calendarId),
+      eq(calendarPermissions.userId, userId)
+    ))
+    .limit(1);
+
+  return permission?.accessType === 'edit';
+}
+
+/**
+ * GET /api/activities/[id] - Get a specific activity
+ *
+ * Security: Validates user has view access to the calendar containing this activity.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,8 +88,8 @@ export async function GET(
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
 
-    // Check authorization
-    const hasAccess = await canAccessCalendar(user.id, user.role, activity.calendarId);
+    // Check authorization (view access is sufficient)
+    const hasAccess = await canViewCalendar(user.id, user.role, activity.calendarId);
     if (!hasAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -45,7 +101,12 @@ export async function GET(
   }
 }
 
-// PUT /api/activities/[id] - Update an activity
+/**
+ * PUT /api/activities/[id] - Update an activity
+ *
+ * Security: Validates user has edit access to the calendar containing this activity.
+ * Users with only 'view' permission cannot update activities.
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -64,16 +125,17 @@ export async function PUT(
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
 
-    const hasAccess = await canAccessCalendar(user.id, user.role, existingActivity.calendarId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Check for edit permission (stricter than view)
+    const hasEditAccess = await canEditCalendar(user.id, user.role, existingActivity.calendarId);
+    if (!hasEditAccess) {
+      return NextResponse.json({ error: 'Forbidden - edit access required' }, { status: 403 });
     }
 
     const body = await request.json();
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
-    // Map allowed fields
+    // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
       'title', 'typeId', 'campaignId', 'swimlaneId', 'calendarId',
       'startDate', 'endDate', 'status', 'description', 'tags',
@@ -94,10 +156,18 @@ export async function PUT(
       }
     });
 
-    // Handle numeric fields
+    // Handle numeric fields (convert to string for database storage)
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
+
+    // Validate date range if dates are being updated
+    if (updateData.startDate && updateData.endDate && updateData.startDate > updateData.endDate) {
+      return NextResponse.json(
+        { error: 'Start date cannot be after end date' },
+        { status: 400 }
+      );
+    }
 
     const [updatedActivity] = await db
       .update(activities)
@@ -116,7 +186,12 @@ export async function PUT(
   }
 }
 
-// DELETE /api/activities/[id] - Delete an activity
+/**
+ * DELETE /api/activities/[id] - Delete an activity
+ *
+ * Security: Validates user has edit access to the calendar containing this activity.
+ * Users with only 'view' permission cannot delete activities.
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -135,9 +210,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
 
-    const hasAccess = await canAccessCalendar(user.id, user.role, existingActivity.calendarId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Check for edit permission (stricter than view)
+    const hasEditAccess = await canEditCalendar(user.id, user.role, existingActivity.calendarId);
+    if (!hasEditAccess) {
+      return NextResponse.json({ error: 'Forbidden - edit access required' }, { status: 403 });
     }
 
     await db.delete(activities).where(eq(activities.id, id));
