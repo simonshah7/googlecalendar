@@ -42,21 +42,21 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
-      <div className="bg-gray-900 dark:bg-valuenova-surface rounded-2xl shadow-2xl border border-gray-700 dark:border-valuenova-border px-4 py-3 flex items-center gap-3">
+    <div className="fixed bottom-4 sm:bottom-6 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+      <div className="bg-gray-900 dark:bg-valuenova-surface rounded-2xl shadow-2xl border border-gray-700 dark:border-valuenova-border px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide">
         {/* Selection Count */}
-        <div className="flex items-center gap-2 pr-4 border-r border-gray-700">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm font-black">
+        <div className="flex items-center gap-2 pr-3 sm:pr-4 border-r border-gray-700 shrink-0">
+          <div className="w-7 sm:w-8 h-7 sm:h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs sm:text-sm font-black">
             {selectedCount}
           </div>
-          <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">Selected</span>
+          <span className="text-[10px] sm:text-xs font-bold text-gray-300 uppercase tracking-widest hidden sm:inline">Selected</span>
         </div>
 
         {/* Status Change */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => toggleDropdown('status')}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 min-h-[44px] text-[10px] sm:text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -82,10 +82,10 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         </div>
 
         {/* Swimlane Change */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => toggleDropdown('swimlane')}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 min-h-[44px] text-[10px] sm:text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -111,10 +111,10 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         </div>
 
         {/* Campaign Change */}
-        <div className="relative">
+        <div className="relative shrink-0 hidden sm:block">
           <button
             onClick={() => toggleDropdown('campaign')}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 min-h-[44px] text-[10px] sm:text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -146,10 +146,10 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         </div>
 
         {/* Region Change */}
-        <div className="relative">
+        <div className="relative shrink-0 hidden sm:block">
           <button
             onClick={() => toggleDropdown('region')}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 min-h-[44px] text-[10px] sm:text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -175,23 +175,23 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         </div>
 
         {/* Divider */}
-        <div className="w-px h-6 bg-gray-700"></div>
+        <div className="w-px h-6 bg-gray-700 shrink-0 hidden sm:block"></div>
 
         {/* Delete */}
         <button
           onClick={onBulkDelete}
-          className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
+          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 min-h-[44px] text-[10px] sm:text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors shrink-0"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
-          Delete
+          <span className="hidden sm:inline">Delete</span>
         </button>
 
         {/* Clear Selection */}
         <button
           onClick={onClearSelection}
-          className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors shrink-0"
           title="Clear selection"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
