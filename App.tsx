@@ -242,7 +242,7 @@ const App: React.FC = () => {
 
     try {
       // Dynamic import html2canvas for export
-      const html2canvas = (await import('https://esm.sh/html2canvas@1.4.1')).default;
+      const html2canvas = (await import('html2canvas')).default;
 
       const canvas = await html2canvas(exportRef.current, {
         scale: 2,
