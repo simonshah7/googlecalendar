@@ -79,7 +79,7 @@ const ActivityBar: React.FC<{
   isSelected?: boolean;
   onSelect?: (id: string, isShiftClick: boolean) => void;
   lastDragEndTimeRef?: React.MutableRefObject<number>;
-}> = ({ activity, timelineStartDate, top, density, onMouseDown, onTouchStart, onEdit, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect, lastDragEndTimeRef }) => {
+}> = ({ activity, timelineStartDate, top, cardProfile, onMouseDown, onTouchStart, onEdit, onDuplicate, onDelete, isDragging, isGhost, dayWidth, colorClasses, draggingOffset, readOnly, isSelected, onSelect, lastDragEndTimeRef }) => {
   const startOffsetDays = diffDaysUTC(formatDate(timelineStartDate), activity.startDate);
   const durationDays = diffDaysUTC(activity.startDate, activity.endDate) + 1;
 

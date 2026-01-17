@@ -162,6 +162,9 @@ export async function POST(request: NextRequest) {
       dependencies = [],
       attachments = [],
       color,
+      slackChannel,
+      outline,
+      inlineComments = [],
     } = body;
 
     // Validate required fields
@@ -200,6 +203,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize slack channel (remove leading # if present for consistency)
+    const normalizedSlackChannel = slackChannel ? slackChannel.replace(/^#/, '') : null;
+
     const [newActivity] = await db
       .insert(activities)
       .values({
@@ -222,6 +228,9 @@ export async function POST(request: NextRequest) {
         dependencies,
         attachments,
         color,
+        slackChannel: normalizedSlackChannel,
+        outline: outline || null,
+        inlineComments,
       })
       .returning();
 

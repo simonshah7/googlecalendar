@@ -233,6 +233,23 @@ export interface Activity {
   recurrenceCount?: number; // Number of occurrences (alternative to end date)
   parentActivityId?: string; // For recurring instances, the parent activity ID
   isRecurrenceParent?: boolean; // True if this is the parent of recurring instances
+  // New fields for enhanced activity modal
+  slackChannel?: string; // Slack channel reference (e.g. "channel-name" or "#channel-name")
+  outline?: string; // Activity outline/notes (multi-line plain text)
+  inlineComments?: ActivityInlineComment[]; // Lightweight inline comments on the activity
+  updatedAt?: string; // Last updated timestamp (ISO format)
+}
+
+/**
+ * Comment entry on an activity (lightweight inline comments).
+ * Stored as part of the activity record for simplicity.
+ */
+export interface ActivityInlineComment {
+  id: string;
+  content: string;
+  authorName: string;
+  authorId: string;
+  createdAt: string; // ISO timestamp
 }
 
 // ============================================================================

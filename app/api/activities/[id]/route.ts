@@ -139,7 +139,8 @@ export async function PUT(
     const allowedFields = [
       'title', 'typeId', 'campaignId', 'swimlaneId', 'calendarId',
       'startDate', 'endDate', 'status', 'description', 'tags',
-      'currency', 'vendorId', 'region', 'dependencies', 'attachments', 'color'
+      'currency', 'vendorId', 'region', 'dependencies', 'attachments', 'color',
+      'outline', 'inlineComments'
     ];
 
     // Optional UUID foreign keys - convert empty strings to null
@@ -160,6 +161,11 @@ export async function PUT(
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
+
+    // Handle slackChannel (normalize by removing leading #)
+    if (body.slackChannel !== undefined) {
+      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : null;
+    }
 
     // Validate date range if dates are being updated
     if (updateData.startDate && updateData.endDate && updateData.startDate > updateData.endDate) {
