@@ -56,6 +56,27 @@ export const regionEnum = pgEnum('region', ['US', 'EMEA', 'ROW']);
  */
 export const accessTypeEnum = pgEnum('access_type', ['view', 'edit', 'copy']);
 
+/**
+ * Recurrence frequency for recurring activities.
+ * - none: One-time activity (default)
+ * - daily: Repeats every day
+ * - weekly: Repeats every week
+ * - biweekly: Repeats every two weeks
+ * - monthly: Repeats every month
+ * - quarterly: Repeats every three months
+ * - yearly: Repeats every year
+ */
+export const recurrenceFrequencyEnum = pgEnum('recurrence_frequency', [
+  'none', 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'
+]);
+
+/**
+ * Action types for activity history audit log.
+ */
+export const historyActionEnum = pgEnum('history_action', [
+  'created', 'updated', 'deleted', 'status_changed', 'moved', 'duplicated'
+]);
+
 // ============================================================================
 // TABLES
 // ============================================================================
@@ -198,8 +219,45 @@ export const activities = pgTable('activities', {
   dependencies: jsonb('dependencies').$type<string[]>().default([]), // Activity IDs
   attachments: jsonb('attachments').$type<{ id: string; name: string; type: string; url: string }[]>().default([]),
   color: text('color'), // Optional custom color override
+  // Recurrence fields
+  recurrenceFrequency: recurrenceFrequencyEnum('recurrence_frequency').default('none').notNull(),
+  recurrenceEndDate: text('recurrence_end_date'), // Optional end date for recurrence
+  recurrenceCount: numeric('recurrence_count'), // Optional: number of occurrences
+  parentActivityId: uuid('parent_activity_id'), // For recurring instances, reference to the parent
+  isRecurrenceParent: boolean('is_recurrence_parent').default(false).notNull(), // True if this is the parent recurring activity
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+/**
+ * Activity Comments table - Discussion threads on activities.
+ *
+ * Allows users to add comments/notes to activities for collaboration.
+ * Comments are ordered by creation time.
+ */
+export const activityComments = pgTable('activity_comments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  activityId: uuid('activity_id').references(() => activities.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+/**
+ * Activity History table - Audit log for activity changes.
+ *
+ * Tracks all changes to activities for accountability and undo support.
+ * Stores the previous state as JSON for potential rollback.
+ */
+export const activityHistory = pgTable('activity_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  activityId: uuid('activity_id').references(() => activities.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id).notNull(), // Who made the change
+  action: historyActionEnum('action').notNull(),
+  changes: jsonb('changes').$type<Record<string, { old: unknown; new: unknown }>>(), // Field changes
+  previousState: jsonb('previous_state').$type<Record<string, unknown>>(), // Full previous state for undo
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // ============================================================================
@@ -252,12 +310,30 @@ export const swimlanesRelations = relations(swimlanes, ({ one, many }) => ({
 /**
  * Activity relations - The most connected entity with multiple foreign keys.
  */
-export const activitiesRelations = relations(activities, ({ one }) => ({
+export const activitiesRelations = relations(activities, ({ one, many }) => ({
   calendar: one(calendars, { fields: [activities.calendarId], references: [calendars.id] }),
   campaign: one(campaigns, { fields: [activities.campaignId], references: [campaigns.id] }),
   swimlane: one(swimlanes, { fields: [activities.swimlaneId], references: [swimlanes.id] }),
   activityType: one(activityTypes, { fields: [activities.typeId], references: [activityTypes.id] }),
   vendor: one(vendors, { fields: [activities.vendorId], references: [vendors.id] }),
+  comments: many(activityComments),
+  history: many(activityHistory),
+}));
+
+/**
+ * Activity Comments relations - Belongs to an activity and a user.
+ */
+export const activityCommentsRelations = relations(activityComments, ({ one }) => ({
+  activity: one(activities, { fields: [activityComments.activityId], references: [activities.id] }),
+  user: one(users, { fields: [activityComments.userId], references: [users.id] }),
+}));
+
+/**
+ * Activity History relations - Belongs to an activity and a user.
+ */
+export const activityHistoryRelations = relations(activityHistory, ({ one }) => ({
+  activity: one(activities, { fields: [activityHistory.activityId], references: [activities.id] }),
+  user: one(users, { fields: [activityHistory.userId], references: [users.id] }),
 }));
 
 // ============================================================================
@@ -280,3 +356,7 @@ export type DbActivity = typeof activities.$inferSelect;
 export type NewActivity = typeof activities.$inferInsert;
 export type DbActivityType = typeof activityTypes.$inferSelect;
 export type DbVendor = typeof vendors.$inferSelect;
+export type DbActivityComment = typeof activityComments.$inferSelect;
+export type NewActivityComment = typeof activityComments.$inferInsert;
+export type DbActivityHistory = typeof activityHistory.$inferSelect;
+export type NewActivityHistory = typeof activityHistory.$inferInsert;
