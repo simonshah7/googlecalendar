@@ -69,6 +69,33 @@ export enum Region {
   ROW = "ROW",
 }
 
+/**
+ * Recurrence frequency for recurring activities.
+ *
+ * Determines how often an activity repeats.
+ */
+export enum RecurrenceFrequency {
+  NONE = "none",
+  DAILY = "daily",
+  WEEKLY = "weekly",
+  BIWEEKLY = "biweekly",
+  MONTHLY = "monthly",
+  QUARTERLY = "quarterly",
+  YEARLY = "yearly",
+}
+
+/**
+ * Action types for activity history audit log.
+ */
+export enum HistoryAction {
+  CREATED = "created",
+  UPDATED = "updated",
+  DELETED = "deleted",
+  STATUS_CHANGED = "status_changed",
+  MOVED = "moved",
+  DUPLICATED = "duplicated",
+}
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -200,6 +227,12 @@ export interface Activity {
   dependencies?: string[]; // Array of activity IDs this depends on
   attachments?: Attachment[]; // Associated files/links
   color?: string; // Optional custom color override (hex or named)
+  // Recurrence fields
+  recurrenceFrequency?: RecurrenceFrequency; // How often this activity repeats
+  recurrenceEndDate?: string; // When the recurrence ends (YYYY-MM-DD)
+  recurrenceCount?: number; // Number of occurrences (alternative to end date)
+  parentActivityId?: string; // For recurring instances, the parent activity ID
+  isRecurrenceParent?: boolean; // True if this is the parent of recurring instances
 }
 
 // ============================================================================
@@ -223,4 +256,98 @@ export interface ActivityWithDetails extends Activity {
   typeName?: string;
   vendorName?: string;
   campaignName?: string;
+}
+
+/**
+ * Comment on an activity for collaboration.
+ */
+export interface ActivityComment {
+  id: string;
+  activityId: string;
+  userId: string;
+  userName?: string; // Resolved from user
+  userEmail?: string; // Resolved from user
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * History entry for tracking activity changes (audit log).
+ */
+export interface ActivityHistoryEntry {
+  id: string;
+  activityId: string;
+  userId: string;
+  userName?: string; // Resolved from user
+  action: HistoryAction;
+  changes?: Record<string, { old: unknown; new: unknown }>;
+  previousState?: Record<string, unknown>;
+  createdAt: string;
+}
+
+// ============================================================================
+// UNDO/REDO TYPES
+// ============================================================================
+
+/**
+ * Types of actions that can be undone/redone.
+ */
+export type UndoActionType =
+  | 'CREATE_ACTIVITY'
+  | 'UPDATE_ACTIVITY'
+  | 'DELETE_ACTIVITY'
+  | 'BULK_DELETE_ACTIVITIES'
+  | 'BULK_UPDATE_ACTIVITIES'
+  | 'CREATE_SWIMLANE'
+  | 'UPDATE_SWIMLANE'
+  | 'DELETE_SWIMLANE'
+  | 'CREATE_CAMPAIGN'
+  | 'UPDATE_CAMPAIGN'
+  | 'DELETE_CAMPAIGN';
+
+/**
+ * An action that can be undone or redone.
+ */
+export interface UndoAction {
+  type: UndoActionType;
+  timestamp: number;
+  description: string; // Human-readable description
+  data: {
+    // For create actions, stores the created entity for deletion on undo
+    created?: Activity | Activity[];
+    // For update actions, stores previous state for restoration
+    previous?: Partial<Activity> | Partial<Activity>[];
+    // For delete actions, stores deleted entity for recreation
+    deleted?: Activity | Activity[];
+    // IDs of affected entities
+    ids?: string[];
+  };
+}
+
+// ============================================================================
+// BULK OPERATION TYPES
+// ============================================================================
+
+/**
+ * Bulk operation types for activities.
+ */
+export type BulkOperationType =
+  | 'delete'
+  | 'changeStatus'
+  | 'changeSwimlane'
+  | 'changeCampaign'
+  | 'changeRegion';
+
+/**
+ * Configuration for bulk operations.
+ */
+export interface BulkOperationConfig {
+  type: BulkOperationType;
+  activityIds: string[];
+  // Target value for update operations
+  targetStatus?: CampaignStatus;
+  targetSwimlaneId?: string;
+  targetCampaignId?: string;
+  targetRegion?: Region;
 }

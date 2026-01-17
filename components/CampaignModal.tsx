@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Activity, Campaign, ActivityType, CampaignStatus, Swimlane, Vendor, Currency, Region, Attachment } from '../types';
+import { Activity, Campaign, ActivityType, CampaignStatus, Swimlane, Vendor, Currency, Region, Attachment, RecurrenceFrequency } from '../types';
 import DatePicker from './DatePicker';
 
 interface ActivityModalProps {
@@ -79,7 +79,11 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
     region: Region.US,
     dependencies: [] as string[],
     attachments: [] as Attachment[],
-    color: PRESET_COLORS[0]
+    color: PRESET_COLORS[0],
+    // Recurrence fields
+    recurrenceFrequency: RecurrenceFrequency.NONE,
+    recurrenceEndDate: undefined,
+    recurrenceCount: undefined,
   });
 
   const [formData, setFormData] = useState<Omit<Activity, 'id'>>(() => getInitialFormData());
@@ -345,20 +349,97 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
               <section className="transition-all duration-300">
                 <SectionHeader title="Schedule & Placement" sectionKey="schedule" />
                 {!collapsedSections.schedule && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div>
-                      <label className={labelClass}>Start Date</label>
-                      <DatePicker name="startDate" value={formData.startDate} onChange={(d) => handleDateChange('startDate', d)} required />
+                  <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className={labelClass}>Start Date</label>
+                        <DatePicker name="startDate" value={formData.startDate} onChange={(d) => handleDateChange('startDate', d)} required />
+                      </div>
+                      <div>
+                        <label className={labelClass}>End Date</label>
+                        <DatePicker name="endDate" value={formData.endDate} onChange={(d) => handleDateChange('endDate', d)} required />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Swimlane</label>
+                        <select name="swimlaneId" value={formData.swimlaneId} onChange={handleChange} disabled={readOnly} className={inputClass}>
+                          {swimlanes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className={labelClass}>End Date</label>
-                      <DatePicker name="endDate" value={formData.endDate} onChange={(d) => handleDateChange('endDate', d)} required />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Swimlane</label>
-                      <select name="swimlaneId" value={formData.swimlaneId} onChange={handleChange} disabled={readOnly} className={inputClass}>
-                        {swimlanes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+
+                    {/* Recurrence Section */}
+                    <div className="p-4 bg-gray-50 dark:bg-valuenova-bg rounded-xl border border-gray-100 dark:border-valuenova-border">
+                      <div className="flex items-center gap-3 mb-4">
+                        <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span className="text-xs font-black text-gray-700 dark:text-white uppercase tracking-widest">Recurrence</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className={labelClass}>Repeat</label>
+                          <select
+                            name="recurrenceFrequency"
+                            value={formData.recurrenceFrequency || RecurrenceFrequency.NONE}
+                            onChange={handleChange}
+                            disabled={readOnly}
+                            className={inputClass}
+                          >
+                            <option value={RecurrenceFrequency.NONE}>Does not repeat</option>
+                            <option value={RecurrenceFrequency.DAILY}>Daily</option>
+                            <option value={RecurrenceFrequency.WEEKLY}>Weekly</option>
+                            <option value={RecurrenceFrequency.BIWEEKLY}>Every 2 weeks</option>
+                            <option value={RecurrenceFrequency.MONTHLY}>Monthly</option>
+                            <option value={RecurrenceFrequency.QUARTERLY}>Quarterly</option>
+                            <option value={RecurrenceFrequency.YEARLY}>Yearly</option>
+                          </select>
+                        </div>
+                        {formData.recurrenceFrequency && formData.recurrenceFrequency !== RecurrenceFrequency.NONE && (
+                          <>
+                            <div>
+                              <label className={labelClass}>End Repeat</label>
+                              <DatePicker
+                                name="recurrenceEndDate"
+                                value={formData.recurrenceEndDate || ''}
+                                onChange={(d) => {
+                                  if (!readOnly) {
+                                    setFormData(prev => ({ ...prev, recurrenceEndDate: d || undefined }));
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Or After # Occurrences</label>
+                              <input
+                                type="number"
+                                name="recurrenceCount"
+                                value={formData.recurrenceCount || ''}
+                                onChange={(e) => {
+                                  if (!readOnly) {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      recurrenceCount: e.target.value ? parseInt(e.target.value, 10) : undefined
+                                    }));
+                                  }
+                                }}
+                                placeholder="e.g. 10"
+                                min="1"
+                                max="52"
+                                disabled={readOnly}
+                                className={inputClass}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {formData.recurrenceFrequency && formData.recurrenceFrequency !== RecurrenceFrequency.NONE && (
+                        <p className="mt-3 text-[10px] text-indigo-500 dark:text-indigo-400 font-bold">
+                          This activity will repeat {formData.recurrenceFrequency}
+                          {formData.recurrenceEndDate ? ` until ${new Date(formData.recurrenceEndDate).toLocaleDateString()}` : ''}
+                          {formData.recurrenceCount ? ` for ${formData.recurrenceCount} occurrences` : ''}
+                          {!formData.recurrenceEndDate && !formData.recurrenceCount ? ' indefinitely' : ''}.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
