@@ -15,7 +15,7 @@ interface ManagerDashboardProps {
 const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ 
   onClose, users, onUpdateUsers, calendars, onUpdateCalendars, activities, onCalendarAction 
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'workspaces' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'workspaces' | 'users' | 'roi-calculator'>('overview');
 
   const stats = useMemo(() => ({
     totalWorkspaces: calendars.length,
@@ -60,7 +60,8 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             {[
               { id: 'overview', label: 'Global Overview', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
               { id: 'workspaces', label: 'All Workspaces', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg> },
-              { id: 'users', label: 'User Directory', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> }
+              { id: 'users', label: 'User Directory', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> },
+              { id: 'roi-calculator', label: 'ROI Calculator', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg> }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -206,7 +207,7 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                            </span>
                         </td>
                         <td className="px-8 py-5 text-right">
-                           <button 
+                           <button
                              onClick={() => toggleUserRole(u.id)}
                              className="px-6 py-2 bg-white dark:bg-valuenova-surface border border-gray-200 dark:border-valuenova-border rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all shadow-sm"
                            >
@@ -217,6 +218,53 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'roi-calculator' && (
+            <div className="flex-grow flex flex-col animate-in fade-in slide-in-from-right-4 overflow-hidden">
+              <div className="mb-8">
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">ROI Calculator</h2>
+                <p className="text-gray-500 dark:text-valuenova-muted font-bold mt-1">Calculate return on investment for your initiatives.</p>
+              </div>
+
+              <div className="flex-grow flex flex-col gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-valuenova-surface p-8 rounded-[2rem] border border-gray-100 dark:border-valuenova-border shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Investment</p>
+                    <p className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">${stats.totalBudget.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white dark:bg-valuenova-surface p-8 rounded-[2rem] border border-gray-100 dark:border-valuenova-border shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Active Initiatives</p>
+                    <p className="text-3xl font-black text-emerald-600 tracking-tight">{stats.totalActivities}</p>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-valuenova-surface p-8 rounded-[2rem] border border-gray-100 dark:border-valuenova-border shadow-sm flex-grow">
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight mb-6">Investment by Workspace</h3>
+                  <div className="space-y-4">
+                    {calendars.map(cal => {
+                      const calActivities = activities.filter(a => a.calendarId === cal.id);
+                      const calBudget = calActivities.reduce((sum, a) => sum + (a.cost || 0), 0);
+                      const percentage = stats.totalBudget > 0 ? (calBudget / stats.totalBudget) * 100 : 0;
+                      return (
+                        <div key={cal.id} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight">{cal.name}</span>
+                            <span className="text-sm font-bold text-gray-500">${calBudget.toLocaleString()}</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 dark:bg-valuenova-bg rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
