@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and } from 'drizzle-orm';
 
 /**
  * Helper function to get calendar IDs a user can access.
@@ -66,11 +66,14 @@ async function canEditCalendar(userId: string, userRole: string, calendarId: str
     return true;
   }
 
-  // Check if user has edit permission
+  // Check if user has edit permission for this specific calendar
   const [permission] = await db
     .select()
     .from(calendarPermissions)
-    .where(eq(calendarPermissions.calendarId, calendarId))
+    .where(and(
+      eq(calendarPermissions.calendarId, calendarId),
+      eq(calendarPermissions.userId, userId)
+    ))
     .limit(1);
 
   return permission?.accessType === 'edit';

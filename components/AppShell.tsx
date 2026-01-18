@@ -242,6 +242,7 @@ export default function AppShell({
 
   // Activity handlers
   const handleSaveActivity = async (activity: Activity) => {
+    console.log('handleSaveActivity called:', { isNew: !activity.id, activity });
     setIsSyncing(true);
     try {
       if (activity.id) {
@@ -254,17 +255,27 @@ export default function AppShell({
         if (res.ok) {
           const { activity: updated } = await res.json();
           setActivities(prev => prev.map(a => a.id === updated.id ? mapActivity(updated) : a));
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          console.error('Failed to update activity:', res.status, errorData);
         }
       } else {
+        const payload = { ...activity, calendarId: activeCalendarId };
+        console.log('Creating activity with payload:', payload);
         const res = await fetch('/api/activities', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...activity, calendarId: activeCalendarId }),
+          body: JSON.stringify(payload),
           credentials: 'include',
         });
+        console.log('Create activity response:', res.status, res.ok);
         if (res.ok) {
           const { activity: created } = await res.json();
+          console.log('Activity created successfully:', created);
           setActivities(prev => [...prev, mapActivity(created)]);
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          console.error('Failed to create activity:', res.status, errorData);
         }
       }
     } catch (error) {
@@ -734,25 +745,28 @@ export default function AppShell({
               onUpdateSwimlane={handleUpdateSwimlane}
               onDeleteSwimlane={handleDeleteSwimlane}
               onReorderSwimlanes={setSwimlanes}
-              onQuickAdd={(s, e, sw) => handleSaveActivity({
-                id: '',
-                title: 'New Activity',
-                startDate: s,
-                endDate: e,
-                swimlaneId: sw,
-                calendarId: activeCalendarId,
-                status: CampaignStatus.Considering,
-                cost: 0,
-                currency: Currency.USD,
-                region: Region.US,
-                typeId: activityTypes[0]?.id || '',
-                campaignId: campaigns[0]?.id || '',
-                description: '',
-                tags: '',
-                vendorId: vendors[0]?.id || '',
-                expectedSAOs: 0,
-                actualSAOs: 0,
-              })}
+              onQuickAdd={(s, e, sw) => {
+                console.log('Timeline quick add triggered:', { startDate: s, endDate: e, swimlaneId: sw, calendarId: activeCalendarId });
+                handleSaveActivity({
+                  id: '',
+                  title: 'New Activity',
+                  startDate: s,
+                  endDate: e,
+                  swimlaneId: sw,
+                  calendarId: activeCalendarId,
+                  status: CampaignStatus.Considering,
+                  cost: 0,
+                  currency: Currency.USD,
+                  region: Region.US,
+                  typeId: activityTypes[0]?.id || '',
+                  campaignId: campaigns[0]?.id || '',
+                  description: '',
+                  tags: '',
+                  vendorId: vendors[0]?.id || '',
+                  expectedSAOs: 0,
+                  actualSAOs: 0,
+                });
+              }}
               onDuplicate={(id) => {
                 const a = activities.find(x => x.id === id);
                 if (a) handleSaveActivity({ ...a, id: '', title: `${a.title} (Copy)` });
