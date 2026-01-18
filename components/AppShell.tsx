@@ -755,6 +755,25 @@ export default function AppShell({
               activities={filteredActivities}
               swimlanes={swimlanes}
               onEdit={(a) => { setEditingActivity(a); setIsModalOpen(true); }}
+              onQuickAdd={(date, swimlaneId) => handleSaveActivity({
+                id: '',
+                title: 'New Activity',
+                startDate: date,
+                endDate: date,
+                swimlaneId: swimlaneId || swimlanes[0]?.id || '',
+                calendarId: activeCalendarId,
+                status: CampaignStatus.Considering,
+                cost: 0,
+                currency: Currency.USD,
+                region: Region.US,
+                typeId: activityTypes[0]?.id || '',
+                campaignId: campaigns[0]?.id || '',
+                description: '',
+                tags: '',
+                vendorId: vendors[0]?.id || '',
+                expectedSAOs: 0,
+                actualSAOs: 0,
+              })}
             />
           )}
           {view === 'table' && (
