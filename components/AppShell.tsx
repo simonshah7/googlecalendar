@@ -99,7 +99,7 @@ export default function AppShell({
   useEffect(() => {
     async function loadPermissions() {
       try {
-        const res = await fetch(`/api/calendar-permissions?calendarId=${activeCalendarId}`);
+        const res = await fetch(`/api/calendar-permissions?calendarId=${activeCalendarId}`, { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setPermissions(data.permissions.map((p: Record<string, unknown>) => ({
@@ -119,7 +119,7 @@ export default function AppShell({
   useEffect(() => {
     async function loadUsers() {
       try {
-        const res = await fetch('/api/users');
+        const res = await fetch('/api/users', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setAllUsers(data.users);
@@ -187,7 +187,7 @@ export default function AppShell({
     async function loadCalendarData() {
       setIsSyncing(true);
       try {
-        const res = await fetch(`/api/calendars/${activeCalendarId}`);
+        const res = await fetch(`/api/calendars/${activeCalendarId}`, { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setActivities(data.activities.map(mapActivity));
@@ -249,6 +249,7 @@ export default function AppShell({
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(activity),
+          credentials: 'include',
         });
         if (res.ok) {
           const { activity: updated } = await res.json();
@@ -259,6 +260,7 @@ export default function AppShell({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...activity, calendarId: activeCalendarId }),
+          credentials: 'include',
         });
         if (res.ok) {
           const { activity: created } = await res.json();
@@ -276,7 +278,7 @@ export default function AppShell({
   const handleDeleteActivity = async (id: string) => {
     setIsSyncing(true);
     try {
-      await fetch(`/api/activities/${id}`, { method: 'DELETE' });
+      await fetch(`/api/activities/${id}`, { method: 'DELETE', credentials: 'include' });
       setActivities(prev => prev.filter(a => a.id !== id));
     } catch (error) {
       console.error('Failed to delete activity:', error);
@@ -293,6 +295,7 @@ export default function AppShell({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, calendarId: activeCalendarId }),
+        credentials: 'include',
       });
       if (res.ok) {
         const { campaign } = await res.json();
@@ -309,6 +312,7 @@ export default function AppShell({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campaign),
+        credentials: 'include',
       });
       if (res.ok) {
         setCampaigns(prev => prev.map(c => c.id === campaign.id ? campaign : c));
@@ -320,7 +324,7 @@ export default function AppShell({
 
   const handleDeleteCampaign = async (id: string) => {
     try {
-      await fetch(`/api/campaigns?id=${id}`, { method: 'DELETE' });
+      await fetch(`/api/campaigns?id=${id}`, { method: 'DELETE', credentials: 'include' });
       setCampaigns(prev => prev.filter(c => c.id !== id));
     } catch (error) {
       console.error('Failed to delete campaign:', error);
@@ -334,6 +338,7 @@ export default function AppShell({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'New Lane', calendarId: activeCalendarId }),
+        credentials: 'include',
       });
       if (res.ok) {
         const { swimlane } = await res.json();
@@ -350,6 +355,7 @@ export default function AppShell({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(swimlane),
+        credentials: 'include',
       });
       setSwimlanes(prev => prev.map(s => s.id === swimlane.id ? swimlane : s));
     } catch (error) {
@@ -359,7 +365,7 @@ export default function AppShell({
 
   const handleDeleteSwimlane = async (id: string) => {
     try {
-      await fetch(`/api/swimlanes?id=${id}`, { method: 'DELETE' });
+      await fetch(`/api/swimlanes?id=${id}`, { method: 'DELETE', credentials: 'include' });
       setSwimlanes(prev => prev.filter(s => s.id !== id));
     } catch (error) {
       console.error('Failed to delete swimlane:', error);
@@ -373,6 +379,7 @@ export default function AppShell({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+        credentials: 'include',
       });
       if (res.ok) {
         const { calendar } = await res.json();
@@ -397,7 +404,7 @@ export default function AppShell({
       return;
     }
     try {
-      await fetch(`/api/calendars/${id}`, { method: 'DELETE' });
+      await fetch(`/api/calendars/${id}`, { method: 'DELETE', credentials: 'include' });
       setCalendars(prev => prev.filter(c => c.id !== id));
       if (activeCalendarId === id) {
         const remaining = calendars.filter(c => c.id !== id);
@@ -410,7 +417,7 @@ export default function AppShell({
 
   // Logout handler
   const handleLogout = async () => {
-    await fetch('/api/auth/me', { method: 'DELETE' });
+    await fetch('/api/auth/me', { method: 'DELETE', credentials: 'include' });
     router.push('/login');
     router.refresh();
   };
@@ -594,6 +601,7 @@ export default function AppShell({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: calendar.name }),
+        credentials: 'include',
       });
       if (res.ok) {
         setCalendars(prev => prev.map(c => c.id === calendar.id ? calendar : c));
@@ -610,6 +618,7 @@ export default function AppShell({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: userId, ...updates }),
+        credentials: 'include',
       });
       if (res.ok) {
         const { user: updatedUser } = await res.json();
@@ -645,6 +654,7 @@ export default function AppShell({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ calendarId: activeCalendarId, email, accessType }),
+        credentials: 'include',
       });
       if (res.ok) {
         const { permission } = await res.json();
@@ -814,6 +824,7 @@ export default function AppShell({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name }),
+              credentials: 'include',
             });
             if (res.ok) {
               const { activityType } = await res.json();
@@ -825,11 +836,12 @@ export default function AppShell({
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(type),
+              credentials: 'include',
             });
             setActivityTypes(prev => prev.map(t => t.id === type.id ? type : t));
           }}
           onDeleteActivityType={async (id) => {
-            await fetch(`/api/activity-types?id=${id}`, { method: 'DELETE' });
+            await fetch(`/api/activity-types?id=${id}`, { method: 'DELETE', credentials: 'include' });
             setActivityTypes(prev => prev.filter(t => t.id !== id));
           }}
           onAddVendor={async (name) => {
@@ -837,6 +849,7 @@ export default function AppShell({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name }),
+              credentials: 'include',
             });
             if (res.ok) {
               const { vendor } = await res.json();
@@ -848,11 +861,12 @@ export default function AppShell({
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(vendor),
+              credentials: 'include',
             });
             setVendors(prev => prev.map(v => v.id === vendor.id ? vendor : v));
           }}
           onDeleteVendor={async (id) => {
-            await fetch(`/api/vendors?id=${id}`, { method: 'DELETE' });
+            await fetch(`/api/vendors?id=${id}`, { method: 'DELETE', credentials: 'include' });
             setVendors(prev => prev.filter(v => v.id !== id));
           }}
           isCampaignInUse={(id) => activities.some(a => a.campaignId === id)}
