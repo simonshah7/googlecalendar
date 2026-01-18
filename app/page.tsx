@@ -9,50 +9,78 @@ import { UserRole, CampaignStatus, Currency, Region } from '@/types';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    redirect('/login');
+  }
 
   if (!user) {
     redirect('/login');
   }
 
   // Fetch initial data for the user
-  const userCalendars = user.role === 'User'
-    ? await db.select().from(calendars).where(eq(calendars.ownerId, user.id))
-    : await db.select().from(calendars);
+  let userCalendars: (typeof calendars.$inferSelect)[] = [];
+  try {
+    userCalendars = user.role === 'User'
+      ? await db.select().from(calendars).where(eq(calendars.ownerId, user.id))
+      : await db.select().from(calendars);
+  } catch (error) {
+    console.error('Error fetching calendars:', error);
+  }
 
   // If user has no calendars, create a default one
   let activeCalendarId: string;
   if (userCalendars.length === 0) {
-    const [newCalendar] = await db
-      .insert(calendars)
-      .values({
-        name: 'Main Roadmap',
-        ownerId: user.id,
-        isTemplate: false,
-      })
-      .returning();
+    try {
+      const [newCalendar] = await db
+        .insert(calendars)
+        .values({
+          name: 'Main Roadmap',
+          ownerId: user.id,
+          isTemplate: false,
+        })
+        .returning();
 
-    // Create default swimlanes
-    await db.insert(swimlanes).values([
-      { name: 'Content Marketing', calendarId: newCalendar.id, sortOrder: '0' },
-      { name: 'Events', calendarId: newCalendar.id, sortOrder: '1' },
-      { name: 'ABM Campaigns', calendarId: newCalendar.id, sortOrder: '2' },
-    ]);
+      // Create default swimlanes
+      await db.insert(swimlanes).values([
+        { name: 'Content Marketing', calendarId: newCalendar.id, sortOrder: '0' },
+        { name: 'Events', calendarId: newCalendar.id, sortOrder: '1' },
+        { name: 'ABM Campaigns', calendarId: newCalendar.id, sortOrder: '2' },
+      ]);
 
-    activeCalendarId = newCalendar.id;
-    userCalendars.push(newCalendar);
+      activeCalendarId = newCalendar.id;
+      userCalendars.push(newCalendar);
+    } catch (error) {
+      console.error('Error creating default calendar:', error);
+      // Cannot continue without a calendar, redirect to login
+      redirect('/login');
+    }
   } else {
     activeCalendarId = userCalendars[0].id;
   }
 
   // Fetch all related data
-  const [allActivities, allSwimlanes, allCampaigns, allActivityTypes, allVendors] = await Promise.all([
-    db.select().from(activities).where(eq(activities.calendarId, activeCalendarId)),
-    db.select().from(swimlanes).where(eq(swimlanes.calendarId, activeCalendarId)),
-    db.select().from(campaigns).where(eq(campaigns.calendarId, activeCalendarId)),
-    db.select().from(activityTypes),
-    db.select().from(vendors),
-  ]);
+  let allActivities: (typeof activities.$inferSelect)[] = [];
+  let allSwimlanes: (typeof swimlanes.$inferSelect)[] = [];
+  let allCampaigns: (typeof campaigns.$inferSelect)[] = [];
+  let allActivityTypes: (typeof activityTypes.$inferSelect)[] = [];
+  let allVendors: (typeof vendors.$inferSelect)[] = [];
+
+  try {
+    [allActivities, allSwimlanes, allCampaigns, allActivityTypes, allVendors] = await Promise.all([
+      db.select().from(activities).where(eq(activities.calendarId, activeCalendarId)),
+      db.select().from(swimlanes).where(eq(swimlanes.calendarId, activeCalendarId)),
+      db.select().from(campaigns).where(eq(campaigns.calendarId, activeCalendarId)),
+      db.select().from(activityTypes),
+      db.select().from(vendors),
+    ]);
+  } catch (error) {
+    console.error('Error fetching calendar data:', error);
+    // Continue with empty arrays - the UI will just be empty
+  }
 
   // Map DB role to enum
   const roleMap: Record<string, UserRole> = {

@@ -190,19 +190,24 @@ export async function getAuthToken(): Promise<string | null> {
  * @returns User object without passwordHash, or null if not authenticated
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const token = await getAuthToken();
-  if (!token) return null;
+  try {
+    const token = await getAuthToken();
+    if (!token) return null;
 
-  const payload = verifyToken(token);
-  if (!payload) return null;
+    const payload = verifyToken(token);
+    if (!payload) return null;
 
-  // Fetch user from database to ensure they still exist and get latest data
-  const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
-  if (!user) return null;
+    // Fetch user from database to ensure they still exist and get latest data
+    const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
+    if (!user) return null;
 
-  // Exclude password hash from returned user object
-  const { passwordHash, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+    // Exclude password hash from returned user object
+    const { passwordHash, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    return null;
+  }
 }
 
 /**
