@@ -98,21 +98,29 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
   const [formData, setFormData] = useState<Omit<Activity, 'id'>>(() => getInitialFormData());
 
   useEffect(() => {
+    // Clear validation errors when activity changes
+    setValidationErrors([]);
+
     if (activity) {
       // Reset form data completely when a new activity is loaded
       // This ensures swimlane and all other fields reflect the activity's current state
       const initialData = getInitialFormData();
+      const validSwimlaneId = swimlanes.some(s => s.id === activity.swimlaneId)
+        ? activity.swimlaneId
+        : (swimlanes[0]?.id || '');
+
       const activityData = {
         ...initialData,
         ...activity,
         // Ensure swimlaneId is valid - fall back to first swimlane if not found
-        swimlaneId: swimlanes.some(s => s.id === activity.swimlaneId)
-          ? activity.swimlaneId
-          : (swimlanes[0]?.id || ''),
+        swimlaneId: validSwimlaneId,
       };
+      console.log('Modal: Loading activity data', { activityId: activity.id, swimlaneId: validSwimlaneId, swimlanesCount: swimlanes.length });
       setFormData(activityData as Omit<Activity, 'id'>);
     } else {
-      setFormData(getInitialFormData());
+      const initialData = getInitialFormData();
+      console.log('Modal: Creating new activity', { swimlaneId: initialData.swimlaneId, swimlanesCount: swimlanes.length });
+      setFormData(initialData);
     }
   }, [activity, swimlanes]);
   
@@ -236,13 +244,30 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Validation state for user feedback
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const handleSubmit = (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     if (readOnly) return;
-    // Only require title, startDate, endDate, and swimlaneId - campaignId and typeId are optional
-    if (formData.title && formData.startDate && formData.endDate && formData.swimlaneId) {
-       onSave({ ...formData, id: activity?.id || '' } as Activity);
+
+    // Validate required fields and collect errors
+    const errors: string[] = [];
+    if (!formData.title) errors.push('Title is required');
+    if (!formData.startDate) errors.push('Start date is required');
+    if (!formData.endDate) errors.push('End date is required');
+    if (!formData.swimlaneId) errors.push('Swimlane is required');
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      console.error('Activity validation failed:', errors);
+      return;
     }
+
+    // Clear any previous validation errors
+    setValidationErrors([]);
+    console.log('Activity validation passed, saving:', { ...formData, id: activity?.id || '' });
+    onSave({ ...formData, id: activity?.id || '' } as Activity);
   };
 
   const labelClass = "block text-[10px] font-black text-gray-400 dark:text-valuenova-muted uppercase tracking-widest mb-2";
@@ -895,24 +920,55 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
           </div>
         </form>
 
-        <div className="px-8 py-6 border-t border-gray-100 dark:border-valuenova-border flex justify-between items-center bg-white dark:bg-valuenova-surface">
-          <div>
-            {activity?.id && onDelete && !readOnly && (
-                <button type="button" onClick={() => onDelete(activity.id as string)} className="px-5 py-2.5 text-xs font-black text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  Delete
-                </button>
-            )}
-          </div>
-          <div className="flex gap-4">
-            <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-gray-500 dark:text-valuenova-muted hover:text-gray-900 dark:hover:text-white transition-colors">
-              {readOnly ? 'Close' : 'Cancel'}
-            </button>
-            {!readOnly && (
-              <button onClick={handleSubmit} type="submit" className="px-10 py-3 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-xl text-sm font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 dark:hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 transition-all">
-                {activity?.id ? 'Update Activity' : 'Confirm & Create'}
+        <div className="px-8 py-6 border-t border-gray-100 dark:border-valuenova-border bg-white dark:bg-valuenova-surface">
+          {/* Validation errors display */}
+          {validationErrors.length > 0 && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs font-black text-red-600 dark:text-red-400 uppercase tracking-widest">Please fix the following errors:</span>
+              </div>
+              <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-400">
+                {validationErrors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* No swimlanes warning */}
+          {swimlanes.length === 0 && !readOnly && (
+            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="text-xs font-bold text-yellow-700 dark:text-yellow-400">No swimlanes available. Please create a swimlane first to save activities.</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center">
+            <div>
+              {activity?.id && onDelete && !readOnly && (
+                  <button type="button" onClick={() => onDelete(activity.id as string)} className="px-5 py-2.5 text-xs font-black text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    Delete
+                  </button>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-gray-500 dark:text-valuenova-muted hover:text-gray-900 dark:hover:text-white transition-colors">
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
-            )}
+              {!readOnly && (
+                <button onClick={handleSubmit} type="button" disabled={swimlanes.length === 0} className="px-10 py-3 bg-indigo-600 dark:bg-valuenova-accent text-white rounded-xl text-sm font-black shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 dark:hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+                  {activity?.id ? 'Update Activity' : 'Confirm & Create'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
