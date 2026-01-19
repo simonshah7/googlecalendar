@@ -97,6 +97,9 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
 
   const [formData, setFormData] = useState<Omit<Activity, 'id'>>(() => getInitialFormData());
 
+  // Validation state for user feedback - must be declared before useEffect that uses it
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
   useEffect(() => {
     // Clear validation errors when activity changes
     setValidationErrors([]);
@@ -243,9 +246,6 @@ const ActivityModal: React.FC<ActivityModalProps> = ({
       navigator.clipboard.writeText(channel);
     }
   };
-
-  // Validation state for user feedback
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const handleSubmit = (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
