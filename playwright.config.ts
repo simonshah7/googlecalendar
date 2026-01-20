@@ -33,6 +33,14 @@ export default defineConfig({
 
     // Take screenshot on failure
     screenshot: 'only-on-failure',
+
+    // Extra HTTP headers for Vercel deployment protection bypass
+    // Required for preview deployments that have Vercel Authentication enabled
+    extraHTTPHeaders: process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+      ? {
+          'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+        }
+      : undefined,
   },
 
   // Configure projects for major browsers
