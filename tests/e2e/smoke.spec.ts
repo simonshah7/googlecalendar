@@ -22,11 +22,20 @@ async function seedTestData(baseURL: string): Promise<void> {
     return;
   }
 
+  // Build headers including Vercel protection bypass if available
+  const headers: Record<string, string> = {
+    'x-test-secret': testSecret,
+  };
+
+  // Add Vercel deployment protection bypass header for preview deployments
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  if (bypassSecret) {
+    headers['x-vercel-protection-bypass'] = bypassSecret;
+  }
+
   const response = await fetch(`${baseURL}/api/test/seed`, {
     method: 'POST',
-    headers: {
-      'x-test-secret': testSecret,
-    },
+    headers,
   });
 
   if (!response.ok) {
