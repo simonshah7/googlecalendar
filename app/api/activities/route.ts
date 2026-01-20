@@ -317,6 +317,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: 'Failed to create activity. Please try again.' }, { status: 500 });
+    // Include actual error in response for debugging
+    const debugError = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({
+      error: 'Failed to create activity. Please try again.',
+      debug: debugError
+    }, { status: 500 });
   }
 }
