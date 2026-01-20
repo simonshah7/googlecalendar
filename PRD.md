@@ -15,6 +15,31 @@
 
 ---
 
+## MVP SCOPE (Phase 1)
+
+### MVP Features - Must Have
+1. **User Authentication** - Register, login, logout
+2. **Calendars/Workspaces** - Create, switch, manage workspaces
+3. **Swimlanes** - Horizontal lanes to organize activities
+4. **Activities** - Create, edit, delete, drag-and-drop
+5. **Campaigns** - Group activities by campaign
+6. **Three Views:**
+   - Timeline View (Gantt-style)
+   - Calendar View (Month grid)
+   - Table View (Spreadsheet)
+7. **Export** - CSV and PNG export with date filtering
+
+### Deferred to Phase 2
+- Multi-user sharing & permissions
+- Comments & notifications
+- Recurring activities
+- Bulk operations
+- Activity types & vendors (use simple text fields for now)
+- Card display profiles
+- Manager dashboard
+
+---
+
 ## 1. User Roles & Permissions
 
 ### Roles
