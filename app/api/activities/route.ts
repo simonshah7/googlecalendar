@@ -226,6 +226,11 @@ export async function POST(request: NextRequest) {
     // Normalize slack channel (remove leading # if present for consistency)
     const normalizedSlackChannel = slackChannel ? slackChannel.replace(/^#/, '') : null;
 
+    // Ensure arrays are valid (not undefined)
+    const safeDependencies = Array.isArray(dependencies) ? dependencies : [];
+    const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
+
     const [newActivity] = await db
       .insert(activities)
       .values({
@@ -237,20 +242,20 @@ export async function POST(request: NextRequest) {
         startDate,
         endDate,
         status,
-        description,
-        tags,
+        description: description || '',
+        tags: tags || '',
         cost: cost.toString(),
         currency,
         vendorId,
         expectedSAOs: expectedSAOs.toString(),
         actualSAOs: actualSAOs.toString(),
         region,
-        dependencies,
-        attachments,
-        color,
+        dependencies: safeDependencies,
+        attachments: safeAttachments,
+        color: color || null,
         slackChannel: normalizedSlackChannel,
         outline: outline || null,
-        inlineComments,
+        inlineComments: safeInlineComments,
       })
       .returning();
 
