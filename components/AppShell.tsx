@@ -84,6 +84,7 @@ export default function AppShell({
   const [filters, setFilters] = useState<Filters>({
     search: '', campaignId: 'all', status: 'all', dateRange: 'all', startDate: '', endDate: '',
   });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Dark mode effect - also persists preference to localStorage
   useEffect(() => {
@@ -244,8 +245,11 @@ export default function AppShell({
   const handleSaveActivity = async (activity: Activity) => {
     console.log('handleSaveActivity called:', { isNew: !activity.id, activity });
     setIsSyncing(true);
+    setErrorMessage(null); // Clear any previous error
+
     try {
       if (activity.id) {
+        // Update existing activity
         const res = await fetch(`/api/activities/${activity.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -255,13 +259,28 @@ export default function AppShell({
         if (res.ok) {
           const { activity: updated } = await res.json();
           setActivities(prev => prev.map(a => a.id === updated.id ? mapActivity(updated) : a));
+          setIsModalOpen(false);
         } else {
-          const errorData = await res.json().catch(() => ({}));
+          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+          const errorMsg = errorData.error || `Failed to update activity (${res.status})`;
           console.error('Failed to update activity:', res.status, errorData);
+          setErrorMessage(errorMsg);
+          // Don't close modal on error so user can see the message
         }
       } else {
+        // Create new activity
         const payload = { ...activity, calendarId: activeCalendarId };
         console.log('Creating activity with payload:', payload);
+
+        // Validate swimlaneId before making API call
+        if (!payload.swimlaneId) {
+          const errorMsg = 'Cannot create activity: No swimlane selected. Please add a swimlane first.';
+          console.error(errorMsg);
+          setErrorMessage(errorMsg);
+          setIsSyncing(false);
+          return;
+        }
+
         const res = await fetch('/api/activities', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -273,16 +292,28 @@ export default function AppShell({
           const { activity: created } = await res.json();
           console.log('Activity created successfully:', created);
           setActivities(prev => [...prev, mapActivity(created)]);
+          setIsModalOpen(false);
         } else {
-          const errorData = await res.json().catch(() => ({}));
+          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+          const errorMsg = errorData.error || `Failed to create activity (${res.status})`;
           console.error('Failed to create activity:', res.status, errorData);
+          setErrorMessage(errorMsg);
+          // For quick-add (no modal open), show a brief alert
+          if (!isModalOpen) {
+            // Use setTimeout to ensure the message is visible even without modal
+            setTimeout(() => setErrorMessage(null), 5000);
+          }
         }
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Network error - please try again';
       console.error('Failed to save activity:', error);
+      setErrorMessage(errorMsg);
+      if (!isModalOpen) {
+        setTimeout(() => setErrorMessage(null), 5000);
+      }
     } finally {
       setIsSyncing(false);
-      setIsModalOpen(false);
     }
   };
 
@@ -723,6 +754,31 @@ export default function AppShell({
         isSyncing={isSyncing}
         lastSync={null}
       />
+
+      {/* Error notification toast */}
+      {errorMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-in fade-in slide-in-from-top duration-300">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl shadow-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-grow">
+                <p className="text-sm font-bold text-red-800 dark:text-red-200">Error</p>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-0.5">{errorMessage}</p>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="text-red-400 hover:text-red-600 dark:hover:text-red-200 p-1"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 pt-4">
         <FilterControls

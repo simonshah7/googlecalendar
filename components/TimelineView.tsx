@@ -765,12 +765,38 @@ const TimelineView = forwardRef<TimelineViewRef, TimelineViewProps>(({
 
   const handleCanvasClick = (e: React.MouseEvent, swimlaneId: string) => {
     if (readOnly) return;
-    if (e.target !== e.currentTarget) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+
+    // More robust check: only proceed if the click is directly on the swimlane container
+    // or on an empty part of it (not on an activity bar)
+    const target = e.target as HTMLElement;
+    const currentTarget = e.currentTarget as HTMLElement;
+
+    // If clicked exactly on the container, proceed
+    if (target === currentTarget) {
+      // Direct click on swimlane - create activity
+    } else {
+      // Check if we clicked on an activity bar or its children
+      // Activity bars have IDs starting with "activity-" or "ghost-"
+      let element: HTMLElement | null = target;
+      while (element && element !== currentTarget) {
+        const id = element.id;
+        if (id && (id.startsWith('activity-') || id.startsWith('ghost-'))) {
+          // Clicked on an activity, don't create a new one
+          return;
+        }
+        element = element.parentElement;
+      }
+      // If we got here, we clicked on some other element inside the swimlane
+      // (like a grid line with pointer-events-none that somehow caught the click)
+      // We should still create the activity
+    }
+
+    const rect = currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const dayOffset = Math.floor(clickX / dayWidth);
     const startDate = formatDate(addDays(timelineStartDate, dayOffset));
     const endDate = formatDate(addDays(timelineStartDate, dayOffset + 7));
+    console.log('Timeline quick-add click:', { swimlaneId, startDate, endDate, clickX, dayOffset });
     onQuickAdd(startDate, endDate, swimlaneId);
   };
 
