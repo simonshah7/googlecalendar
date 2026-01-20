@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, activities, calendars, calendarPermissions } from '@/db';
+import { db, activities, calendars, calendarPermissions, swimlanes } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
 import { eq, inArray, and } from 'drizzle-orm';
 
@@ -184,6 +184,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden - edit access required' }, { status: 403 });
     }
 
+    // Verify the swimlane exists and belongs to the calendar
+    const [swimlane] = await db
+      .select()
+      .from(swimlanes)
+      .where(and(
+        eq(swimlanes.id, swimlaneId),
+        eq(swimlanes.calendarId, calendarId)
+      ))
+      .limit(1);
+
+    if (!swimlane) {
+      return NextResponse.json(
+        { error: 'Invalid swimlane. The selected swimlane does not exist or does not belong to this calendar.' },
+        { status: 400 }
+      );
+    }
+
     // Convert empty strings to null for optional UUID foreign keys
     const typeId = rawTypeId || null;
     const campaignId = rawCampaignId || null;
@@ -240,6 +257,66 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ activity: newActivity }, { status: 201 });
   } catch (error) {
     console.error('Error creating activity:', error);
-    return NextResponse.json({ error: 'Failed to create activity' }, { status: 500 });
+
+    // Provide more specific error messages based on error type
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+
+      // Check for foreign key constraint violations
+      if (errorMessage.includes('foreign key') || errorMessage.includes('violates foreign key')) {
+        if (errorMessage.includes('swimlane')) {
+          return NextResponse.json(
+            { error: 'The selected swimlane no longer exists. Please refresh and try again.' },
+            { status: 400 }
+          );
+        }
+        if (errorMessage.includes('calendar')) {
+          return NextResponse.json(
+            { error: 'The calendar no longer exists. Please refresh and try again.' },
+            { status: 400 }
+          );
+        }
+        if (errorMessage.includes('campaign')) {
+          return NextResponse.json(
+            { error: 'The selected campaign no longer exists. Please select a different campaign.' },
+            { status: 400 }
+          );
+        }
+        if (errorMessage.includes('type')) {
+          return NextResponse.json(
+            { error: 'The selected activity type no longer exists. Please select a different type.' },
+            { status: 400 }
+          );
+        }
+        if (errorMessage.includes('vendor')) {
+          return NextResponse.json(
+            { error: 'The selected vendor no longer exists. Please select a different vendor.' },
+            { status: 400 }
+          );
+        }
+        return NextResponse.json(
+          { error: 'A referenced item no longer exists. Please refresh and try again.' },
+          { status: 400 }
+        );
+      }
+
+      // Check for invalid UUID format
+      if (errorMessage.includes('invalid input syntax for type uuid') || errorMessage.includes('uuid')) {
+        return NextResponse.json(
+          { error: 'Invalid data format. Please refresh the page and try again.' },
+          { status: 400 }
+        );
+      }
+
+      // Check for connection issues
+      if (errorMessage.includes('connection') || errorMessage.includes('timeout')) {
+        return NextResponse.json(
+          { error: 'Database connection error. Please try again in a moment.' },
+          { status: 503 }
+        );
+      }
+    }
+
+    return NextResponse.json({ error: 'Failed to create activity. Please try again.' }, { status: 500 });
   }
 }
