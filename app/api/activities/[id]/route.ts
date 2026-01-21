@@ -135,9 +135,10 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
-    // Use sql`null` for explicit SQL NULL values
-    // This prevents the Neon driver from serializing JavaScript null as empty string
-    const sqlNull = sql`null`;
+    // Use NULLIF at the database level to convert empty strings to NULL
+    // This handles cases where the Neon driver converts JS null to empty string
+    const nullIfEmpty = (value: string | null | undefined) =>
+      sql`NULLIF(${value || ''}, '')`;
 
     // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
@@ -160,11 +161,10 @@ export async function PUT(
       }
     });
 
-    // Process optional fields - use sql`null` for clearing values
+    // Process optional fields - use NULLIF to convert empty strings to NULL
     optionalFields.forEach(field => {
       if (body[field] !== undefined) {
-        // If value is provided and truthy, use it; otherwise use SQL NULL
-        updateData[field] = body[field] || sqlNull;
+        updateData[field] = nullIfEmpty(body[field]);
       }
     });
 
@@ -172,14 +172,15 @@ export async function PUT(
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
-    // recurrenceCount is nullable without default - use sql`null` if clearing
+    // recurrenceCount is nullable without default - use NULLIF for clearing
     if (body.recurrenceCount !== undefined) {
-      updateData.recurrenceCount = body.recurrenceCount ? body.recurrenceCount.toString() : sqlNull;
+      updateData.recurrenceCount = nullIfEmpty(body.recurrenceCount?.toString());
     }
 
-    // Handle slackChannel (normalize by removing leading #, use sql`null` for clearing)
+    // Handle slackChannel (normalize by removing leading #, use NULLIF for clearing)
     if (body.slackChannel !== undefined) {
-      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : sqlNull;
+      const normalizedChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : '';
+      updateData.slackChannel = nullIfEmpty(normalizedChannel);
     }
 
     // Validate date range if dates are being updated

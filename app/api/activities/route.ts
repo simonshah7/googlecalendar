@@ -235,9 +235,10 @@ export async function POST(request: NextRequest) {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
 
-    // Use sql`null` for optional fields to explicitly insert SQL NULL
-    // This prevents the Neon driver from serializing JavaScript null as empty string
-    const sqlNull = sql`null`;
+    // Use NULLIF at the database level to convert empty strings to NULL
+    // This handles cases where the Neon driver converts JS null to empty string
+    const nullIfEmpty = (value: string | null | undefined) =>
+      sql`NULLIF(${value || ''}, '')`;
 
     const [newActivity] = await db
       .insert(activities)
@@ -258,17 +259,17 @@ export async function POST(request: NextRequest) {
         dependencies: safeDependencies,
         attachments: safeAttachments,
         inlineComments: safeInlineComments,
-        // Use sql`null` for all nullable fields without defaults to avoid DEFAULT errors
-        typeId: typeId || sqlNull,
-        campaignId: campaignId || sqlNull,
-        vendorId: vendorId || sqlNull,
-        color: color || sqlNull,
-        slackChannel: normalizedSlackChannel || sqlNull,
-        outline: outline || sqlNull,
-        recurrenceEndDate: recurrenceEndDate || sqlNull,
-        recurrenceCount: recurrenceCount ? recurrenceCount.toString() : sqlNull,
-        parentActivityId: parentActivityId || sqlNull,
-      } as typeof activities.$inferInsert)
+        // Use NULLIF to convert empty strings to NULL at database level
+        typeId: nullIfEmpty(typeId),
+        campaignId: nullIfEmpty(campaignId),
+        vendorId: nullIfEmpty(vendorId),
+        color: nullIfEmpty(color),
+        slackChannel: nullIfEmpty(normalizedSlackChannel),
+        outline: nullIfEmpty(outline),
+        recurrenceEndDate: nullIfEmpty(recurrenceEndDate),
+        recurrenceCount: nullIfEmpty(recurrenceCount?.toString()),
+        parentActivityId: nullIfEmpty(parentActivityId),
+      } as unknown as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({ activity: newActivity }, { status: 201 });
