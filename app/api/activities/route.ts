@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions, swimlanes } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq, inArray, and, sql } from 'drizzle-orm';
 
 /**
  * Helper function to get calendar IDs a user can access.
@@ -231,38 +231,37 @@ export async function POST(request: NextRequest) {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
 
-    // Build the insert object, omitting null values to let PostgreSQL use column defaults
-    // This prevents the Neon driver from serializing null as empty string
-    const insertValues: Record<string, unknown> = {
-      title,
-      swimlaneId,
-      calendarId,
-      startDate,
-      endDate,
-      status,
-      description: description || '',
-      tags: tags || '',
-      cost: cost.toString(),
-      currency,
-      expectedSAOs: expectedSAOs.toString(),
-      actualSAOs: actualSAOs.toString(),
-      region,
-      dependencies: safeDependencies,
-      attachments: safeAttachments,
-      inlineComments: safeInlineComments,
-    };
-
-    // Only add optional fields if they have actual values (not null/undefined/empty)
-    if (typeId) insertValues.typeId = typeId;
-    if (campaignId) insertValues.campaignId = campaignId;
-    if (vendorId) insertValues.vendorId = vendorId;
-    if (color) insertValues.color = color;
-    if (normalizedSlackChannel) insertValues.slackChannel = normalizedSlackChannel;
-    if (outline) insertValues.outline = outline;
+    // Use sql`null` for optional fields to explicitly insert SQL NULL
+    // This prevents the Neon driver from serializing JavaScript null as empty string
+    const sqlNull = sql`null`;
 
     const [newActivity] = await db
       .insert(activities)
-      .values(insertValues as typeof activities.$inferInsert)
+      .values({
+        title,
+        swimlaneId,
+        calendarId,
+        startDate,
+        endDate,
+        status,
+        description: description || '',
+        tags: tags || '',
+        cost: cost.toString(),
+        currency,
+        expectedSAOs: expectedSAOs.toString(),
+        actualSAOs: actualSAOs.toString(),
+        region,
+        dependencies: safeDependencies,
+        attachments: safeAttachments,
+        inlineComments: safeInlineComments,
+        // Use sql`null` for optional fields to ensure proper NULL insertion
+        typeId: typeId || sqlNull,
+        campaignId: campaignId || sqlNull,
+        vendorId: vendorId || sqlNull,
+        color: color || sqlNull,
+        slackChannel: normalizedSlackChannel || sqlNull,
+        outline: outline || sqlNull,
+      } as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({ activity: newActivity }, { status: 201 });

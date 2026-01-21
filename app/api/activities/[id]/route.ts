@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 /**
  * Helper function to check if user can view a calendar.
@@ -135,6 +135,10 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
+    // Use sql`null` for explicit SQL NULL values
+    // This prevents the Neon driver from serializing JavaScript null as empty string
+    const sqlNull = sql`null`;
+
     // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
       'title', 'swimlaneId', 'calendarId',
@@ -143,8 +147,7 @@ export async function PUT(
       'inlineComments'
     ];
 
-    // Optional fields that should only be included if they have actual values
-    // This prevents the Neon driver from serializing null as empty string
+    // Optional UUID/text fields that can be set to NULL
     const optionalFields = ['typeId', 'campaignId', 'vendorId', 'color', 'outline'];
 
     // Process standard allowed fields
@@ -154,13 +157,12 @@ export async function PUT(
       }
     });
 
-    // Process optional fields - only include if they have actual values
+    // Process optional fields - use sql`null` for clearing values
     optionalFields.forEach(field => {
-      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
-        updateData[field] = body[field];
+      if (body[field] !== undefined) {
+        // If value is provided and truthy, use it; otherwise use SQL NULL
+        updateData[field] = body[field] || sqlNull;
       }
-      // Note: To clear an optional field, you would need a separate mechanism
-      // For now, omitting null/empty values prevents Neon serialization issues
     });
 
     // Handle numeric fields (convert to string for database storage)
@@ -168,9 +170,9 @@ export async function PUT(
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
 
-    // Handle slackChannel (normalize by removing leading #, only include if has value)
-    if (body.slackChannel !== undefined && body.slackChannel) {
-      updateData.slackChannel = body.slackChannel.replace(/^#/, '');
+    // Handle slackChannel (normalize by removing leading #, use sql`null` for clearing)
+    if (body.slackChannel !== undefined) {
+      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : sqlNull;
     }
 
     // Validate date range if dates are being updated
