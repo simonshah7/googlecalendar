@@ -231,32 +231,38 @@ export async function POST(request: NextRequest) {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
 
+    // Build the insert object, omitting null values to let PostgreSQL use column defaults
+    // This prevents the Neon driver from serializing null as empty string
+    const insertValues: Record<string, unknown> = {
+      title,
+      swimlaneId,
+      calendarId,
+      startDate,
+      endDate,
+      status,
+      description: description || '',
+      tags: tags || '',
+      cost: cost.toString(),
+      currency,
+      expectedSAOs: expectedSAOs.toString(),
+      actualSAOs: actualSAOs.toString(),
+      region,
+      dependencies: safeDependencies,
+      attachments: safeAttachments,
+      inlineComments: safeInlineComments,
+    };
+
+    // Only add optional fields if they have actual values (not null/undefined/empty)
+    if (typeId) insertValues.typeId = typeId;
+    if (campaignId) insertValues.campaignId = campaignId;
+    if (vendorId) insertValues.vendorId = vendorId;
+    if (color) insertValues.color = color;
+    if (normalizedSlackChannel) insertValues.slackChannel = normalizedSlackChannel;
+    if (outline) insertValues.outline = outline;
+
     const [newActivity] = await db
       .insert(activities)
-      .values({
-        title,
-        typeId,
-        campaignId,
-        swimlaneId,
-        calendarId,
-        startDate,
-        endDate,
-        status,
-        description: description || '',
-        tags: tags || '',
-        cost: cost.toString(),
-        currency,
-        vendorId,
-        expectedSAOs: expectedSAOs.toString(),
-        actualSAOs: actualSAOs.toString(),
-        region,
-        dependencies: safeDependencies,
-        attachments: safeAttachments,
-        color: color || null,
-        slackChannel: normalizedSlackChannel,
-        outline: outline || null,
-        inlineComments: safeInlineComments,
-      })
+      .values(insertValues as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({ activity: newActivity }, { status: 201 });

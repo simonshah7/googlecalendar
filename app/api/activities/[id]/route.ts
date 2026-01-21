@@ -137,24 +137,30 @@ export async function PUT(
 
     // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
-      'title', 'typeId', 'campaignId', 'swimlaneId', 'calendarId',
+      'title', 'swimlaneId', 'calendarId',
       'startDate', 'endDate', 'status', 'description', 'tags',
-      'currency', 'vendorId', 'region', 'dependencies', 'attachments', 'color',
-      'outline', 'inlineComments'
+      'currency', 'region', 'dependencies', 'attachments',
+      'inlineComments'
     ];
 
-    // Optional UUID foreign keys - convert empty strings to null
-    const optionalUuidFields = ['typeId', 'campaignId', 'vendorId'];
+    // Optional fields that should only be included if they have actual values
+    // This prevents the Neon driver from serializing null as empty string
+    const optionalFields = ['typeId', 'campaignId', 'vendorId', 'color', 'outline'];
 
+    // Process standard allowed fields
     allowedFields.forEach(field => {
       if (body[field] !== undefined) {
-        // Convert empty strings to null for optional UUID fields
-        if (optionalUuidFields.includes(field) && body[field] === '') {
-          updateData[field] = null;
-        } else {
-          updateData[field] = body[field];
-        }
+        updateData[field] = body[field];
       }
+    });
+
+    // Process optional fields - only include if they have actual values
+    optionalFields.forEach(field => {
+      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+        updateData[field] = body[field];
+      }
+      // Note: To clear an optional field, you would need a separate mechanism
+      // For now, omitting null/empty values prevents Neon serialization issues
     });
 
     // Handle numeric fields (convert to string for database storage)
@@ -162,9 +168,9 @@ export async function PUT(
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
 
-    // Handle slackChannel (normalize by removing leading #)
-    if (body.slackChannel !== undefined) {
-      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : null;
+    // Handle slackChannel (normalize by removing leading #, only include if has value)
+    if (body.slackChannel !== undefined && body.slackChannel) {
+      updateData.slackChannel = body.slackChannel.replace(/^#/, '');
     }
 
     // Validate date range if dates are being updated
