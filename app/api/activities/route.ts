@@ -168,6 +168,10 @@ export async function POST(request: NextRequest) {
       slackChannel,
       outline,
       inlineComments = [],
+      // Recurrence fields (nullable, no defaults)
+      recurrenceEndDate,
+      recurrenceCount,
+      parentActivityId,
     } = body;
 
     // Validate required fields
@@ -254,13 +258,16 @@ export async function POST(request: NextRequest) {
         dependencies: safeDependencies,
         attachments: safeAttachments,
         inlineComments: safeInlineComments,
-        // Use sql`null` for optional fields to ensure proper NULL insertion
+        // Use sql`null` for all nullable fields without defaults to avoid DEFAULT errors
         typeId: typeId || sqlNull,
         campaignId: campaignId || sqlNull,
         vendorId: vendorId || sqlNull,
         color: color || sqlNull,
         slackChannel: normalizedSlackChannel || sqlNull,
         outline: outline || sqlNull,
+        recurrenceEndDate: recurrenceEndDate || sqlNull,
+        recurrenceCount: recurrenceCount ? recurrenceCount.toString() : sqlNull,
+        parentActivityId: parentActivityId || sqlNull,
       } as typeof activities.$inferInsert)
       .returning();
 

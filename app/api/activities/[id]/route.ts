@@ -147,8 +147,11 @@ export async function PUT(
       'inlineComments'
     ];
 
-    // Optional UUID/text fields that can be set to NULL
-    const optionalFields = ['typeId', 'campaignId', 'vendorId', 'color', 'outline'];
+    // Optional UUID/text fields that can be set to NULL (no defaults in schema)
+    const optionalFields = [
+      'typeId', 'campaignId', 'vendorId', 'color', 'outline',
+      'recurrenceEndDate', 'parentActivityId'
+    ];
 
     // Process standard allowed fields
     allowedFields.forEach(field => {
@@ -169,6 +172,10 @@ export async function PUT(
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
+    // recurrenceCount is nullable without default - use sql`null` if clearing
+    if (body.recurrenceCount !== undefined) {
+      updateData.recurrenceCount = body.recurrenceCount ? body.recurrenceCount.toString() : sqlNull;
+    }
 
     // Handle slackChannel (normalize by removing leading #, use sql`null` for clearing)
     if (body.slackChannel !== undefined) {
