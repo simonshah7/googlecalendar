@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 /**
  * Helper function to check if user can view a calendar.
@@ -135,25 +135,36 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
+    // Use NULLIF at the database level to convert empty strings to NULL
+    // This handles cases where the Neon driver converts JS null to empty string
+    const nullIfEmpty = (value: string | null | undefined) =>
+      sql`NULLIF(${value || ''}, '')`;
+
     // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
-      'title', 'typeId', 'campaignId', 'swimlaneId', 'calendarId',
+      'title', 'swimlaneId', 'calendarId',
       'startDate', 'endDate', 'status', 'description', 'tags',
-      'currency', 'vendorId', 'region', 'dependencies', 'attachments', 'color',
-      'outline', 'inlineComments'
+      'currency', 'region', 'dependencies', 'attachments',
+      'inlineComments'
     ];
 
-    // Optional UUID foreign keys - convert empty strings to null
-    const optionalUuidFields = ['typeId', 'campaignId', 'vendorId'];
+    // Optional UUID/text fields that can be set to NULL (no defaults in schema)
+    const optionalFields = [
+      'typeId', 'campaignId', 'vendorId', 'color', 'outline',
+      'recurrenceEndDate', 'parentActivityId'
+    ];
 
+    // Process standard allowed fields
     allowedFields.forEach(field => {
       if (body[field] !== undefined) {
-        // Convert empty strings to null for optional UUID fields
-        if (optionalUuidFields.includes(field) && body[field] === '') {
-          updateData[field] = null;
-        } else {
-          updateData[field] = body[field];
-        }
+        updateData[field] = body[field];
+      }
+    });
+
+    // Process optional fields - use NULLIF to convert empty strings to NULL
+    optionalFields.forEach(field => {
+      if (body[field] !== undefined) {
+        updateData[field] = nullIfEmpty(body[field]);
       }
     });
 
@@ -161,10 +172,15 @@ export async function PUT(
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
+    // recurrenceCount is nullable without default - use NULLIF for clearing
+    if (body.recurrenceCount !== undefined) {
+      updateData.recurrenceCount = nullIfEmpty(body.recurrenceCount?.toString());
+    }
 
-    // Handle slackChannel (normalize by removing leading #)
+    // Handle slackChannel (normalize by removing leading #, use NULLIF for clearing)
     if (body.slackChannel !== undefined) {
-      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : null;
+      const normalizedChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : '';
+      updateData.slackChannel = nullIfEmpty(normalizedChannel);
     }
 
     // Validate date range if dates are being updated

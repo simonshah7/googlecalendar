@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions, swimlanes } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq, inArray, and, sql } from 'drizzle-orm';
 
 /**
  * Helper function to get calendar IDs a user can access.
@@ -168,6 +168,10 @@ export async function POST(request: NextRequest) {
       slackChannel,
       outline,
       inlineComments = [],
+      // Recurrence fields (nullable, no defaults)
+      recurrenceEndDate,
+      recurrenceCount,
+      parentActivityId,
     } = body;
 
     // Validate required fields
@@ -231,12 +235,15 @@ export async function POST(request: NextRequest) {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
 
+    // Use NULLIF at the database level to convert empty strings to NULL
+    // This handles cases where the Neon driver converts JS null to empty string
+    const nullIfEmpty = (value: string | null | undefined) =>
+      sql`NULLIF(${value || ''}, '')`;
+
     const [newActivity] = await db
       .insert(activities)
       .values({
         title,
-        typeId,
-        campaignId,
         swimlaneId,
         calendarId,
         startDate,
@@ -246,17 +253,23 @@ export async function POST(request: NextRequest) {
         tags: tags || '',
         cost: cost.toString(),
         currency,
-        vendorId,
         expectedSAOs: expectedSAOs.toString(),
         actualSAOs: actualSAOs.toString(),
         region,
         dependencies: safeDependencies,
         attachments: safeAttachments,
-        color: color || null,
-        slackChannel: normalizedSlackChannel,
-        outline: outline || null,
         inlineComments: safeInlineComments,
-      })
+        // Use NULLIF to convert empty strings to NULL at database level
+        typeId: nullIfEmpty(typeId),
+        campaignId: nullIfEmpty(campaignId),
+        vendorId: nullIfEmpty(vendorId),
+        color: nullIfEmpty(color),
+        slackChannel: nullIfEmpty(normalizedSlackChannel),
+        outline: nullIfEmpty(outline),
+        recurrenceEndDate: nullIfEmpty(recurrenceEndDate),
+        recurrenceCount: nullIfEmpty(recurrenceCount?.toString()),
+        parentActivityId: nullIfEmpty(parentActivityId),
+      } as unknown as typeof activities.$inferInsert)
       .returning();
 
     return NextResponse.json({ activity: newActivity }, { status: 201 });
