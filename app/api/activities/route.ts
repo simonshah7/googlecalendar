@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, activities, calendars, calendarPermissions, swimlanes } from '@/db';
+import { db, activities, calendars, calendarPermissions, swimlanes, getNeonSql } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, inArray, and, sql } from 'drizzle-orm';
+import { eq, inArray, and } from 'drizzle-orm';
 
 /**
  * Helper function to get calendar IDs a user can access.
@@ -235,42 +235,47 @@ export async function POST(request: NextRequest) {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const safeInlineComments = Array.isArray(inlineComments) ? inlineComments : [];
 
-    // Use NULLIF at the database level to convert empty strings to NULL
-    // This handles cases where the Neon driver converts JS null to empty string
-    const nullIfEmpty = (value: string | null | undefined) =>
-      sql`NULLIF(${value || ''}, '')`;
+    // Use Neon client directly - its tagged template handles JavaScript null properly
+    const neonSql = getNeonSql();
 
-    const [newActivity] = await db
-      .insert(activities)
-      .values({
-        title,
-        swimlaneId,
-        calendarId,
-        startDate,
-        endDate,
-        status,
-        description: description || '',
-        tags: tags || '',
-        cost: cost.toString(),
-        currency,
-        expectedSAOs: expectedSAOs.toString(),
-        actualSAOs: actualSAOs.toString(),
-        region,
-        dependencies: safeDependencies,
-        attachments: safeAttachments,
-        inlineComments: safeInlineComments,
-        // Use NULLIF to convert empty strings to NULL at database level
-        typeId: nullIfEmpty(typeId),
-        campaignId: nullIfEmpty(campaignId),
-        vendorId: nullIfEmpty(vendorId),
-        color: nullIfEmpty(color),
-        slackChannel: nullIfEmpty(normalizedSlackChannel),
-        outline: nullIfEmpty(outline),
-        recurrenceEndDate: nullIfEmpty(recurrenceEndDate),
-        recurrenceCount: nullIfEmpty(recurrenceCount?.toString()),
-        parentActivityId: nullIfEmpty(parentActivityId),
-      } as unknown as typeof activities.$inferInsert)
-      .returning();
+    const result = await neonSql`
+      INSERT INTO activities (
+        title, swimlane_id, calendar_id, start_date, end_date, status,
+        description, tags, cost, currency, expected_saos, actual_saos, region,
+        dependencies, attachments, inline_comments,
+        type_id, campaign_id, vendor_id, color, slack_channel, outline,
+        recurrence_end_date, recurrence_count, parent_activity_id
+      ) VALUES (
+        ${title},
+        ${swimlaneId},
+        ${calendarId},
+        ${startDate},
+        ${endDate},
+        ${status},
+        ${description || ''},
+        ${tags || ''},
+        ${cost.toString()},
+        ${currency},
+        ${expectedSAOs.toString()},
+        ${actualSAOs.toString()},
+        ${region},
+        ${JSON.stringify(safeDependencies)},
+        ${JSON.stringify(safeAttachments)},
+        ${JSON.stringify(safeInlineComments)},
+        ${typeId || null},
+        ${campaignId || null},
+        ${vendorId || null},
+        ${color || null},
+        ${normalizedSlackChannel || null},
+        ${outline || null},
+        ${recurrenceEndDate || null},
+        ${recurrenceCount ? recurrenceCount.toString() : null},
+        ${parentActivityId || null}
+      )
+      RETURNING *
+    `;
+
+    const newActivity = result[0];
 
     return NextResponse.json({ activity: newActivity }, { status: 201 });
   } catch (error) {

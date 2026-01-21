@@ -5,6 +5,7 @@ import * as schema from './schema';
 // Lazy initialization for the database connection
 // This prevents errors during build time when DATABASE_URL is not available
 let _db: NeonHttpDatabase<typeof schema> | null = null;
+let _neonSql: NeonQueryFunction<false, false> | null = null;
 
 function getDb(): NeonHttpDatabase<typeof schema> {
   if (_db) return _db;
@@ -17,9 +18,26 @@ function getDb(): NeonHttpDatabase<typeof schema> {
     );
   }
 
-  const sql: NeonQueryFunction<false, false> = neon(databaseUrl);
-  _db = drizzle(sql, { schema });
+  _neonSql = neon(databaseUrl);
+  _db = drizzle(_neonSql, { schema });
   return _db;
+}
+
+// Get the raw Neon SQL function for direct queries
+// The Neon client's tagged template handles JavaScript null properly
+export function getNeonSql(): NeonQueryFunction<false, false> {
+  if (_neonSql) return _neonSql;
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error(
+      'DATABASE_URL environment variable is not set. ' +
+      'Please add it to your Vercel project settings or .env.local file.'
+    );
+  }
+
+  _neonSql = neon(databaseUrl);
+  return _neonSql;
 }
 
 // Export a proxy that lazily initializes the database

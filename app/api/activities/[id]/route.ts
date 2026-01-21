@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, activities, calendars, calendarPermissions } from '@/db';
 import { getCurrentUser } from '@/lib/auth';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Helper function to check if user can view a calendar.
@@ -133,12 +133,8 @@ export async function PUT(
 
     const body = await request.json();
 
+    // Build update data - Drizzle handles updates fine, main null issue was in INSERT
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
-
-    // Use NULLIF at the database level to convert empty strings to NULL
-    // This handles cases where the Neon driver converts JS null to empty string
-    const nullIfEmpty = (value: string | null | undefined) =>
-      sql`NULLIF(${value || ''}, '')`;
 
     // Define allowed fields for update (whitelist approach for security)
     const allowedFields = [
@@ -148,7 +144,7 @@ export async function PUT(
       'inlineComments'
     ];
 
-    // Optional UUID/text fields that can be set to NULL (no defaults in schema)
+    // Optional fields that can be null
     const optionalFields = [
       'typeId', 'campaignId', 'vendorId', 'color', 'outline',
       'recurrenceEndDate', 'parentActivityId'
@@ -161,10 +157,10 @@ export async function PUT(
       }
     });
 
-    // Process optional fields - use NULLIF to convert empty strings to NULL
+    // Process optional fields - convert empty string to null
     optionalFields.forEach(field => {
       if (body[field] !== undefined) {
-        updateData[field] = nullIfEmpty(body[field]);
+        updateData[field] = body[field] || null;
       }
     });
 
@@ -172,15 +168,13 @@ export async function PUT(
     if (body.cost !== undefined) updateData.cost = body.cost.toString();
     if (body.expectedSAOs !== undefined) updateData.expectedSAOs = body.expectedSAOs.toString();
     if (body.actualSAOs !== undefined) updateData.actualSAOs = body.actualSAOs.toString();
-    // recurrenceCount is nullable without default - use NULLIF for clearing
     if (body.recurrenceCount !== undefined) {
-      updateData.recurrenceCount = nullIfEmpty(body.recurrenceCount?.toString());
+      updateData.recurrenceCount = body.recurrenceCount ? body.recurrenceCount.toString() : null;
     }
 
-    // Handle slackChannel (normalize by removing leading #, use NULLIF for clearing)
+    // Handle slackChannel (normalize by removing leading #)
     if (body.slackChannel !== undefined) {
-      const normalizedChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : '';
-      updateData.slackChannel = nullIfEmpty(normalizedChannel);
+      updateData.slackChannel = body.slackChannel ? body.slackChannel.replace(/^#/, '') : null;
     }
 
     // Validate date range if dates are being updated
