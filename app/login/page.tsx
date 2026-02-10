@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +38,32 @@ export default function LoginPage() {
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setError('');
+    setDevLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/dev-login', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Dev login failed');
+        return;
+      }
+
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Dev login failed. Is the database running?');
+    } finally {
+      setDevLoading(false);
     }
   };
 
@@ -215,6 +242,39 @@ export default function LoginPage() {
               </Link>
             </p>
           </div>
+
+          {/* Dev Login - only shown in development */}
+          {process.env.NODE_ENV !== 'production' && (
+            <div style={{
+              marginTop: '16px',
+              paddingTop: '16px',
+              borderTop: '1px solid #30363D',
+              textAlign: 'center'
+            }}>
+              <button
+                type="button"
+                onClick={handleDevLogin}
+                disabled={devLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: devLoading ? '#065F46' : '#047857',
+                  color: 'white',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  border: '1px solid #059669',
+                  cursor: devLoading ? 'not-allowed' : 'pointer',
+                  opacity: devLoading ? 0.7 : 1,
+                }}
+              >
+                {devLoading ? 'Logging in...' : 'Dev Login (Skip Auth)'}
+              </button>
+              <p style={{ color: '#4B5563', fontSize: '11px', marginTop: '8px', margin: '8px 0 0 0' }}>
+                Development only - creates a test account automatically
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

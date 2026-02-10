@@ -15,6 +15,13 @@
       "when": 1768667493735,
       "tag": "0001_sharing_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768700000000,
+      "tag": "0002_add_activity_detail_fields",
+      "breakpoints": true
     }
   ]
 }
