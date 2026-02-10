@@ -6,7 +6,7 @@ import { eq, and } from 'drizzle-orm';
 // Helper to check if user can manage calendar permissions
 async function canManageCalendar(userId: string, userRole: string, calendarId: string): Promise<boolean> {
   // Managers and admins can manage any calendar
-  if (userRole === 'MANAGER' || userRole === 'ADMIN') return true;
+  if (userRole === 'Manager' || userRole === 'Admin') return true;
 
   // Check if user owns the calendar
   const [calendar] = await db.select().from(calendars).where(eq(calendars.id, calendarId)).limit(1);
